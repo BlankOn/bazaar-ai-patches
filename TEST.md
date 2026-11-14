@@ -1,0 +1,277 @@
+# TEST: verifying the APT system-updates patch
+
+How to test the patch **after it has been applied** (PLAN.md §5.1–§5.3).
+Read [PLAN.md](PLAN.md) first. Tests T1–T6 are automated and read-only.
+T7 is a visual comparison, T8 lists manual tests (two of them really upgrade
+the machine), and the **last step, T9, runs the real Bazaar app**.
+
+| Test | What it proves | How | Changes the system? |
+|---|---|---|---|
+| T1 | applied files match `patches/src/`, every hook is in place, Flatpak manifest valid | `run-tests.sh` | no |
+| T2 | the patch's C code compiles standalone with `-Werror` | `run-tests.sh` | no |
+| T3 | the full Bazaar build succeeds, no warnings from the patch's files | `run-tests.sh` | no |
+| T4 | the card's numbers (upgrades, security, new, removals) match PackageKit **and** apt | `run-tests.sh` | no |
+| T5 | the card renders in the standalone harness | `run-tests.sh` | no |
+| T6 | the card renders on the Library page of the **real app** | `run-tests.sh` | no |
+| T7 | screenshots look right | by eye | no |
+| T8 | buttons and error paths behave | by hand | ⚠️ two rows upgrade the machine |
+| T9 | run Bazaar and use it | by hand | no (unless you click update) |
+
+## 0. Prerequisites
+
+A Debian-based machine (Debian, Ubuntu, BlankOn, …) with a graphical session
+(Wayland or X11) and the PackageKit daemon. Build dependencies:
+
+```bash
+sudo apt install packagekit meson ninja-build valac blueprint-compiler libxml2-utils python3-babel libgtk-4-dev libadwaita-1-dev libdex-dev libflatpak-dev libappstream-dev libxmlb-dev libyaml-dev libsoup-3.0-dev libjson-glib-dev libglycin-2-dev libglycin-gtk4-2-dev libwebkitgtk-6.0-dev libsecret-1-dev libproxy-dev libmalcontent-0-dev libgtksourceview-5-dev libmd4c-dev libsystemd-dev libdbus-1-dev
+```
+
+Test-only dependencies (for T4): Python bindings for PackageKit.
+
+```bash
+sudo apt install python3-gi gir1.2-packagekitglib-1.0
+```
+
+- `python3-babel` is an **upstream** build requirement that is easy to miss;
+  without it the build fails at `src/countries.gvariant`.
+- `pkcon` (`packagekit-tools`) is **not** needed. Some distributions,
+  BlankOn included, do not ship it; T4 asks PackageKit through its Python
+  bindings instead.
+- Quit any running Bazaar before T6/T9 (`flatpak kill io.github.kolunmi.Bazaar`):
+  it owns the application ID and would receive the window instead of the build.
+
+## 1. Run the automated tests (T1–T6)
+
+From the repository root:
+
+```bash
+ai-patches/patches/harness/run-tests.sh
+```
+
+It takes about 3 minutes (most of it T6 waiting for Bazaar's startup refresh)
+and ends with a summary like:
+
+```text
+=== Summary
+PASS  T1  static checks (sync, markers, manifest)
+PASS  T2  standalone harness builds with -Werror
+PASS  T3  full Bazaar build, no patch warnings
+PASS  T4  card counts match PackageKit and apt
+PASS  T5  harness screenshots
+PASS  T6  real Bazaar app: Library page screenshots
+Screenshots: <repo>/build/apt-tests
+```
+
+The exit status is 0 only if everything passed. `--no-app` skips T6, for a
+machine without a full build. Each test can also be run on its own, as
+described below.
+
+### T1: static checks
+
+Compares every file in `patches/src/` with its applied copy in `src/`,
+checks that every hooked file carries the `DOWNSTREAM PATCH (APT system updates)`
+marker, and validates the Flatpak manifest (the JSON file cannot carry the
+marker, so the script checks for the PackageKit permission instead).
+By hand:
+
+```bash
+for f in ai-patches/patches/src/*; do cmp "$f" "src/$(basename "$f")" || echo "OUT OF SYNC: $f"; done
+```
+
+```bash
+git grep --untracked -c "DOWNSTREAM PATCH (APT system updates)" -- src po
+```
+
+```bash
+python3 -m json.tool build-aux/flatpak/io.github.kolunmi.Bazaar.json >/dev/null && echo valid
+```
+
+### T2: standalone harness build
+
+```bash
+ai-patches/patches/harness/build.sh
+```
+
+Compiles `bz-apt-updates.c` and `bz-apt-updates-card.c` with
+`-Wall -Wextra -Werror` plus the card's Blueprint, into
+`build/apt-harness/harness`: a window that shows only the card. Needs only
+`gcc`, `pkg-config`, `blueprint-compiler`, `libgtk-4-dev`, `libadwaita-1-dev`.
+It can also run **before** applying the patch, against the master copies:
+`BZ_APT_SRC=ai-patches/patches/src ai-patches/patches/harness/build.sh`.
+
+### T3: full Bazaar build
+
+```bash
+meson setup build && ninja -C build
+```
+
+```bash
+touch src/bz-apt-updates.c src/bz-apt-updates-card.c src/bz-library-page.c && ninja -C build 2>&1 | grep -iE "warning|error"
+```
+
+The second command must print nothing.
+
+### T4: count check
+
+```bash
+python3 -I ai-patches/patches/harness/check-counts.py
+```
+
+Starts the harness, reads the line the card's model logs after every
+`GetUpdates`:
+
+```text
+BAZAAR::APT-DEBUG: GetUpdates: 1393 upgrades (0 security), 61 new, 3 removals
+```
+
+and compares it with PackageKit (via `gir1.2-packagekitglib-1.0`) and with
+`apt list --upgradable`. Expected:
+
+```text
+card:        1393 upgrades (0 security), 61 new, 3 removals
+PackageKit:  1393 upgrades (0 security), 61 new, 3 removals  raw={'normal': 1393, 'install': 61, 'remove': 3}
+PASS  card upgrades == PackageKit upgrades
+PASS  card security == PackageKit security
+PASS  card new == PackageKit new
+PASS  card removals == PackageKit removals
+apt:         1393 upgradable
+PASS  card upgrades == apt list --upgradable
+note: the upgrade would remove: libperl5.42, perl-modules-5.42, python3-pkg-resources
+```
+
+Why the categories matter: PackageKit's `GetUpdates` returns not only
+upgrades but also packages a full upgrade **newly installs** (info
+`install`, e.g. a renamed library) and **removes** (info `remove`/`obsolete`).
+apt's `--upgradable` lists upgrades only. Before 2026-11-14 the card counted
+all of them as "updates" (1457 instead of 1393). Now the title counts upgrades
+only, so it must equal apt's number.
+
+- If **card ≠ PackageKit**: a bug in the patch (the classification in
+  `bz-apt-updates.c`, or PackageKit enum values changed: API.md §2.2).
+- If **card = PackageKit ≠ apt**: the script prints the packages that differ.
+  A small difference can be legitimate (PackageKit hides blocked/kept-back
+  packages; apt may have newer lists than PackageKit's cache). Refresh both
+  (`sudo apt update`, then ⟳ in the card) and run again.
+- If the GetUpdates line is missing: PackageKit is not running or slow; raise
+  the wait with `HARNESS_DELAY=30`.
+
+### T5: harness screenshots
+
+The script saves `build/apt-tests/harness.png` (collapsed) and
+`build/apt-tests/harness-expanded.png` (package list open). By hand:
+
+```bash
+HARNESS_ICONS=$PWD/src/icons G_MESSAGES_DEBUG=BAZAAR::APT build/apt-harness/harness
+```
+
+Harness environment variables: `HARNESS_SHOT=out.png` (save, then quit),
+`HARNESS_DELAY=20` (seconds before the shot), `HARNESS_EXPAND=1` (open the
+package list), `HARNESS_HEIGHT=640`, `HARNESS_ACTION=apt-updates.check`
+(trigger a refresh after 4 s; this downloads package lists, it does not
+change installed packages).
+
+### T6: real app screenshots
+
+```bash
+ai-patches/patches/harness/app-shot.sh build/apt-tests/app-library.png 40
+```
+
+```bash
+APP_SHOT_EXPAND=1 ai-patches/patches/harness/app-shot.sh build/apt-tests/app-library-expanded.png 40
+```
+
+Starts `build/src/bazaar` with a small `LD_PRELOAD` shim
+(`patches/harness/app-shot.c`) that opens the Library page and saves the
+window to PNG after the given number of seconds, then exits. It clicks
+nothing. The script also compiles the GSettings schema into `build/schemas`
+and puts `build/src` on `PATH` (Bazaar re-executes itself by name for its
+refresh worker). See [Troubleshooting](#troubleshooting) for what did not
+work.
+
+## 2. T7: compare the screenshots
+
+Open `build/apt-tests/` and compare with
+[`patches/harness/expected-library-page.png`](patches/harness/expected-library-page.png):
+
+- **"System Updates"** is the first section of the Library page, directly
+  above upstream's Flatpak **"Pending Updates"**.
+- Title: **"N System Package Updates"**, where N is T4's upgrade count
+  (not upgrades + new + removals).
+- Subtitle: "Includes S security updates" when there are any, then
+  "· K new packages" and "· R packages will be removed" when non-zero.
+  With none of those it says "Provided by APT".
+- Expanded: packages to be **removed come first**, each with "Will be removed"
+  and a red trash icon; then security updates (warning icon), other updates
+  (new version as subtitle), and new packages ("New package, VERSION").
+  At most 100 rows, then "And K more packages".
+- Buttons: ⟳ and **Restart & Update** with a ▾ menu.
+
+## 3. T8: manual functional tests
+
+Run Bazaar as in T9, open **Library** (Ctrl+D).
+
+| Scenario | How | Expected |
+|---|---|---|
+| Updates pending | normal start | counts as in T4/T7 |
+| Up to date | after updating | "System Is Up to Date", only ⟳ shown |
+| Refresh | click ⟳ | polkit prompt may appear; progress row with live status ("Downloading repository information", …), then the updated list |
+| Cancel | Cancel while refreshing | stops, no error row |
+| Auth refused | click ⟳, dismiss the polkit dialog | error row with PackageKit's message; ✕ dismisses it |
+| ⚠️ Offline update | Restart & Update | polkit prompt → download progress → "Updates Ready to Install" → Restart Now → installed during boot |
+| Un-schedule | Cancel Update on the ready row | row disappears; offline update no longer pending (`ls /system-update` fails) |
+| ⚠️ Live update | ▾ → Install Now Without Restarting → confirm | polkit prompt → progress → list refreshes; maybe "Restart Required" |
+| No PackageKit | `sudo systemctl mask --now packagekit` (unmask after: `sudo systemctl unmask packagekit`) | card hidden, Bazaar otherwise unchanged |
+| No permission | Flathub build without overrides (PLAN.md §7) | card hidden |
+| Zero Flatpaks | no Flatpak apps installed | card shown on the "No Apps Found" page |
+
+⚠️ **Offline update** and **Live update** really upgrade the machine, including
+the removals the card lists. Only run them on a machine where that is wanted,
+and when the person who owns it agrees.
+
+## 4. T9: run Bazaar (final step)
+
+After T1–T8, run the patched Bazaar from the build directory and use it
+normally:
+
+```bash
+mkdir -p build/schemas && cp data/io.github.kolunmi.Bazaar.gschema.xml build/schemas/ && glib-compile-schemas build/schemas
+```
+
+```bash
+PATH=$PWD/build/src:$PATH GSETTINGS_SCHEMA_DIR=$PWD/build/schemas G_MESSAGES_DEBUG=BAZAAR::APT ./build/src/bazaar
+```
+
+Expected terminal output while it starts:
+
+```text
+BAZAAR::APT-DEBUG: Using PackageKit backend 'APT'
+BAZAAR::APT-DEBUG: Package lists were refreshed N seconds ago
+BAZAAR::APT-DEBUG: GetUpdates: U upgrades (S security), K new, R removals
+```
+
+Press Ctrl+D for the Library page. Browsing, Flatpak installs and Flatpak
+updates must work exactly as upstream. Close the window to quit.
+
+If the Search page (or any page) shows missing text and blank tiles, it is a
+GTK renderer bug, not this patch: prefix the command with `GSK_RENDERER=gl`
+(see [Troubleshooting](#troubleshooting)).
+
+## 5. Record the result
+
+Add a row to PLAN.md §10 "Attempt log" with the summary of
+`run-tests.sh`, T4's numbers, and which T8 rows were run.
+
+## Troubleshooting
+
+Lessons from earlier runs:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| T6 times out, no screenshot | Bazaar shows its window from a **child process** it spawns; a shim that removes `LD_PRELOAD` never reaches it | `app-shot.c` keeps `LD_PRELOAD`; processes without a window just stop their timer |
+| shim's timer never fires | `g_timeout_add` called from the shim's constructor runs before GLib/the app set up the main context | add the timeout from a helper thread after 2 s (as `app-shot.c` does) |
+| T6 screenshot is blank (background only) | rendering Bazaar's window offscreen with its own GPU renderer drew only the background, although the render tree had the content | `app-shot.c` renders with `gsk_cairo_renderer_new ()` |
+| GTK Broadway backend crashes | `broadway-output.c: assertion failed: (!reused_node->consumed)` on Bazaar's Explore page | do not use Broadway |
+| "A Bazaar instance is already running" | the Flatpak Bazaar owns the app ID | `flatpak kill io.github.kolunmi.Bazaar` |
+| build fails at `countries.gvariant` | upstream needs `python3-babel` | install it |
+| Search page shows missing text, blank category tiles (upstream commit too) | bug in GTK **4.23.4**'s default **Vulkan** renderer (seen 2026-11-14 on AMD Radeon Cezanne, Wayland); the same render tree draws correctly with the GL and Cairo renderers, so it is not Bazaar or this patch | run Bazaar with `GSK_RENDERER=gl`; GTK 4.24.1 likely fixes it (untested). Check the renderer with `GSK_DEBUG=renderer` |
+| `APP_SHOT_DEBUG=1` | logs every shim tick: pid, window type, mapped | for debugging T6 |

@@ -1,0 +1,188 @@
+// DOWNSTREAM PATCH (APT system updates): see ai-patches/PLAN.md
+using Gtk 4.0;
+using Adw 1;
+
+template $BzAptUpdatesCard: Adw.Bin {
+  visible: false;
+
+  child: Box {
+    orientation: vertical;
+    spacing: 8;
+    margin-top: 15;
+
+    Label {
+      label: _("System Updates");
+      xalign: 0;
+      margin-start: 12;
+      margin-top: 15;
+
+      styles [
+        "heading",
+        "h4",
+      ]
+    }
+
+    ListBox {
+      selection-mode: none;
+      margin-start: 4;
+      margin-end: 4;
+      margin-bottom: 4;
+
+      styles [
+        "boxed-list",
+      ]
+
+      Adw.ActionRow progress_row {
+        visible: false;
+        use-markup: false;
+
+        [suffix]
+        Box {
+          spacing: 12;
+          valign: center;
+
+          ProgressBar progress_bar {
+            valign: center;
+            width-request: 120;
+          }
+
+          Button cancel_button {
+            label: _("_Cancel");
+            use-underline: true;
+            valign: center;
+            clicked => $cancel_cb(template);
+          }
+        }
+      }
+
+      Adw.ActionRow error_row {
+        visible: false;
+        use-markup: false;
+        title: _("System Update Failed");
+        subtitle-selectable: true;
+
+        [prefix]
+        Image {
+          icon-name: "dialog-error-symbolic";
+
+          styles [
+            "error",
+          ]
+        }
+
+        [suffix]
+        Button {
+          icon-name: "window-close-symbolic";
+          tooltip-text: _("Dismiss");
+          valign: center;
+          clicked => $dismiss_error_cb(template);
+
+          styles [
+            "flat",
+          ]
+        }
+      }
+
+      Adw.ActionRow ready_row {
+        visible: false;
+        title: _("Updates Ready to Install");
+        subtitle: _("System updates will be installed the next time the computer restarts");
+
+        [suffix]
+        Box {
+          spacing: 6;
+          valign: center;
+
+          Button {
+            label: _("C_ancel Update");
+            use-underline: true;
+            valign: center;
+            clicked => $cancel_offline_cb(template);
+          }
+
+          Button {
+            label: _("_Restart Now");
+            use-underline: true;
+            valign: center;
+            clicked => $reboot_cb(template);
+
+            styles [
+              "suggested-action",
+            ]
+          }
+        }
+      }
+
+      Adw.ActionRow restart_row {
+        visible: false;
+        title: _("Restart Required");
+        subtitle: _("Restart the computer to finish applying system updates");
+
+        [suffix]
+        Button {
+          label: _("_Restart Now");
+          use-underline: true;
+          valign: center;
+          clicked => $reboot_cb(template);
+
+          styles [
+            "suggested-action",
+          ]
+        }
+      }
+
+      Adw.ExpanderRow expander_row {
+        use-markup: false;
+
+        [prefix]
+        Image {
+          icon-name: "software-update-available-symbolic";
+        }
+
+        [suffix]
+        Box {
+          height-request: 60;
+          spacing: 6;
+
+          Button refresh_button {
+            icon-name: "view-refresh-symbolic";
+            tooltip-text: _("Check for Updates");
+            valign: center;
+            clicked => $check_cb(template);
+
+            styles [
+              "flat",
+            ]
+          }
+
+          Adw.SplitButton update_button {
+            label: _("Restart & _Update");
+            use-underline: true;
+            tooltip-text: _("Download updates now and install them on the next restart");
+            menu-model: update_menu;
+            valign: center;
+            clicked => $prepare_offline_cb(template);
+
+            styles [
+              "suggested-action",
+            ]
+          }
+        }
+      }
+    }
+  };
+}
+
+menu update_menu {
+  section {
+    item {
+      label: _("Install Now Without Restarting");
+      action: "apt-updates.install-now";
+    }
+
+    item {
+      label: _("Check for Updates");
+      action: "apt-updates.check";
+    }
+  }
+}
