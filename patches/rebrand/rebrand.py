@@ -62,6 +62,16 @@ TOKENS = [
      'Please treat "Warsi" and "Bazaar" as brand names'),
 ]
 
+# Desktop-file keywords, so app launchers that search with GLib
+# (g_desktop_app_info_search: Name, Keywords, GenericName, Comment, Exec),
+# such as BlankOn's Praya and GNOME Shell, find Warsi by "warsi" (its Name),
+# "warung aplikasi", "store", "software", "gnome software" and "bazaar".
+# A translation's Keywords replaces the English ones, so the English search
+# words are also appended to every translation (see rename_msgids).
+OLD_KEYWORDS = "System;Package;Manager;Discover;Flatpak;Software;App;Store;"
+EXTRA_KEYWORDS = "Warung Aplikasi;Bazaar;GNOME Software;"
+KEYWORDS_IN_EVERY_LANGUAGE = "Software;Store;" + EXTRA_KEYWORDS
+
 META = "data/" + NEW_ID + ".metainfo.xml.in"
 ABOUT_NOTE_HOOK = (
     "  /* DOWNSTREAM PATCH (Warsi rebrand): \"Originally Bazaar, patched by BlankOn\n"
@@ -95,6 +105,8 @@ EDITS = [
     ("data/meson.build", "Named bazaar.desktop like", "Named warsi.desktop like"),
     # desktop file and AppStream metadata
     ("data/" + NEW_ID + ".desktop.in", "Name=Bazaar", "Name=Warsi"),
+    ("data/" + NEW_ID + ".desktop.in", "Keywords=" + OLD_KEYWORDS,
+     "Keywords=" + OLD_KEYWORDS + EXTRA_KEYWORDS),
     (META, "<name>Bazaar</name>", "<name>Warsi</name>"),
     (META, '<translation type="gettext">bazaar</translation>',
      '<translation type="gettext">warsi</translation>'),
@@ -229,6 +241,15 @@ def name_stem(blocks):
     return "aza"
 
 
+def add_keywords(msgstr):
+    """msgstr with KEYWORDS_IN_EVERY_LANGUAGE appended, skipping words it
+    already has (case-insensitive)."""
+    words = [w for w in msgstr.split(";") if w]
+    have = {w.casefold() for w in words}
+    words += [w for w in KEYWORDS_IN_EVERY_LANGUAGE.split(";") if w and w.casefold() not in have]
+    return ";".join(words) + ";"
+
+
 def rename_msgids(text):
     """Rename the RENAMED msgids (and their translations) in one .po file.
     "Bazaar" in a translation becomes "Warsi". A translation that names the
@@ -248,6 +269,17 @@ def rename_msgids(text):
         while end < len(lines) and lines[end].startswith('"'):
             end += 1
         msgid = "".join(re.findall(r'"(.*)"', "\n".join(lines[idx:end])))
+        if msgid == OLD_KEYWORDS:
+            lines[idx:end] = ['msgid "' + OLD_KEYWORDS + EXTRA_KEYWORDS + '"']
+            s = idx + 1
+            e = s
+            while e < len(lines) and (lines[e].startswith("msgstr") or lines[e].startswith('"')):
+                e += 1
+            msgstr = "".join(re.findall(r'"(.*)"', "\n".join(lines[s:e])))
+            if msgstr:
+                lines[s:e] = ['msgstr "' + add_keywords(msgstr) + '"']
+            blocks[n] = "\n".join(lines)
+            continue
         if msgid not in RENAMED:
             continue
         new_id = msgid.replace(OLD_NAME, NEW_NAME)

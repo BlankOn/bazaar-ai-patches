@@ -27,7 +27,7 @@ The commands below run from the repository root with this directory at
 | T5 | the card renders in the standalone harness | `run-tests.sh` | no |
 | T6 | the card renders on the Library page of the **real app** | `run-tests.sh` | no |
 | T7 | the update worker counts Flatpak and APT updates and sends the notification | `run-tests.sh --notify` | posts a notification; sets `last-update-notification` |
-| R1 | (Warsi only) the rebrand is complete: nothing left for `rebrand.py`, no Bazaar ID or file name installed, every Warsi file installed, metadata valid, Indonesian About note | `run-tests.sh` | no |
+| R1 | (Warsi only) the rebrand is complete: nothing left for `rebrand.py`, no Bazaar ID or file name installed, every Warsi file installed, metadata valid, Indonesian About note, and app search (Praya, GNOME Shell) finds Warsi by "warsi", "warung aplikasi", "store", "software", "gnome software", "bazaar" in English and Indonesian | `run-tests.sh` | no |
 | T8 | screenshots look right, in English and Indonesian | by eye | no |
 | T9 | buttons, error paths and the notification click behave | by hand | ⚠️ two rows upgrade the machine |
 | T10 | run Bazaar and use it | by hand | no (unless you click update) |
@@ -131,7 +131,18 @@ python3 ai-patches/patches/rebrand/rebrand.py --check && echo "nothing left to r
 rm -rf build/apt-tests/install && DESTDIR=$PWD/build/apt-tests/install meson install -C build --no-rebuild >/dev/null && grep -rlE "io\.github\.kolunmi\.Bazaar|io/github/kolunmi/Bazaar" build/apt-tests/install; find build/apt-tests/install -iname "*bazaar*"
 ```
 
-The second command must print nothing. `run-tests.sh` also checks that the
+The second command must print nothing. App launchers must find Warsi by
+the words people use. `patches/harness/app-search.py` runs GLib's
+desktop-file search, as BlankOn's Praya and GNOME Shell do, in English and
+Indonesian:
+
+```bash
+for l in C id; do env XDG_DATA_HOME=$PWD/build/apt-tests/app-search XDG_DATA_DIRS=/nonexistent LANGUAGE=$l python3 ai-patches/patches/harness/app-search.py id.blankonlinux.warsi.desktop warsi "warung aplikasi" store software "gnome software" bazaar; done
+```
+
+(with the installed `id.blankonlinux.warsi.desktop` copied into
+`build/apt-tests/app-search/applications/` first; `run-tests.sh` does that).
+Every query must say `found`. `run-tests.sh` also checks that the
 Warsi programs, autostart file, desktop file, AppStream file, schema, icons,
 D-Bus service and `id/LC_MESSAGES/warsi.mo` are installed, and runs
 `desktop-file-validate` and `appstreamcli validate --no-net`.

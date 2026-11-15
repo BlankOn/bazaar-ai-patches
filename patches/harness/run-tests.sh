@@ -117,6 +117,17 @@ r1_rebrand () {
   if command -v appstreamcli >/dev/null; then
     appstreamcli validate --no-net "$(find "$dest" -name "$APP_ID.metainfo.xml")" >/dev/null || ok=1
   fi
+  # launchers (Praya, GNOME Shell) find the app by these words, in English
+  # and Indonesian (GLib's desktop-file search, like they use)
+  apps="$OUT/app-search/applications"
+  rm -rf "$OUT/app-search" && mkdir -p "$apps"
+  cp "$(find "$dest" -name "$APP_ID.desktop")" "$apps/"
+  for lang in C id; do
+    echo "app search, LANGUAGE=$lang:"
+    env XDG_DATA_HOME="$OUT/app-search" XDG_DATA_DIRS="$OUT/app-search/none" LANGUAGE=$lang \
+      python3 -I "$HERE/app-search.py" "$APP_ID.desktop" \
+      warsi "warung aplikasi" store software "gnome software" bazaar || ok=1
+  done
   note="$(LANGUAGE=id msgunfmt "$(find "$dest" -path "*/id/LC_MESSAGES/$GETTEXT_DOMAIN.mo")" | grep -A1 'msgid "Originally Bazaar')"
   echo "$note" | grep -q "Dibangun dari Bazaar" || { echo "MISSING: Indonesian About note"; ok=1; }
   [ $ok = 0 ] && echo "rebrand complete: $APP_ID, no Bazaar ID or file name installed, metadata valid"

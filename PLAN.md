@@ -493,6 +493,7 @@ Warsi.
 | App icon (scalable, development, symbolic) | Bazaar's logo | Warsi's (`patches/rebrand/icons/`) |
 | About dialog | name "Bazaar" | name "Warsi", then **"Originally Bazaar, patched by BlankOn Linux"** (Indonesian: "Dibangun dari Bazaar, dimodifikasi oleh BlankOn Linux"; wording changed on 2026-11-15 at the user's request, from "heavily patched" / "Berasal dari … besar-besaran") |
 | AppStream description | | one more paragraph: Warsi is based on Bazaar, patched by BlankOn Linux, and also updates the system's Debian APT packages |
+| Desktop file `Keywords`, in every language | System, Package, Manager, Discover, Flatpak, Software, App, Store | the same plus **Warung Aplikasi; Bazaar; GNOME Software**, and every translation also gets Software; Store; Warung Aplikasi; Bazaar; GNOME Software. So BlankOn's Praya and GNOME Shell find Warsi by "warsi", "warung aplikasi", "store", "software", "gnome software" and "bazaar" in English and Indonesian (asked for on 2026-11-15) |
 
 These keep "Bazaar" on purpose:
 - **The About dialog's section below the note**: developer "The Bazaar
@@ -534,6 +535,13 @@ These keep "Bazaar" on purpose:
 
    On 2026-11-15 this marked 86 translations in 15 languages fuzzy, none in
    Indonesian.
+
+   The desktop file's `Keywords` msgid gets the new search words too, and
+   each translation keeps its own keywords with the English search words
+   appended (`OLD_KEYWORDS`, `EXTRA_KEYWORDS`, `add_keywords ()`). App
+   launchers search with GLib's `g_desktop_app_info_search ()`, which reads
+   `Keywords` in the current language only, so a translation without "store"
+   would hide Warsi from an English search word in that language.
 5. **Adds the new files.** It copies `patches/rebrand/src/bz-rebrand.{c,h}`
    and the icons, removes Bazaar's icon source (`….Source.svg`), and merges
    `patches/rebrand/po/id-rebrand.po` with `merge-translations.py`.

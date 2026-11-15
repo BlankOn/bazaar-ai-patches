@@ -518,9 +518,9 @@ changes only `meson.build`, `src/`, `data/` and `po/`:
 | `src/bz-window.blp`, `src/bz-window.c`, `src/shortcuts-dialog.blp`, `src/bz-bundle-install-dialog.blp`, `src/bz-preferences-dialog.c`, `src/bz-inspector.c` | strings naming the app | "Bazaar" → "Warsi" (window title, About/Quit menu items, "new version" banner, removal guard, shortcut, software-source dialog, background reason, inspector page) |
 | `src/bazaar.gresource.xml`, `src/bz-preferences-dialog.c`, `src/bazaar-autostart.desktop` | per-user autostart | `warsi.desktop`, `Name=Warsi` |
 | `data/meson.build`, `data/bazaar-update-notifications.desktop` | system autostart (H11) | installed as `warsi.desktop`, `Name=Warsi` |
-| `data/id.blankonlinux.warsi.desktop.in` | desktop file | `Name=Warsi` |
+| `data/id.blankonlinux.warsi.desktop.in` | desktop file | `Name=Warsi`; `Keywords` gains `Warung Aplikasi;Bazaar;GNOME Software;` (search words for Praya and GNOME Shell) |
 | `data/id.blankonlinux.warsi.metainfo.xml.in` | AppStream | `<name>Warsi</name>`, gettext domain `warsi`, one more description paragraph |
-| `po/*.po` | translations | the renamed msgids and their translations (PLAN.md §10.3 step 4); `po/id.po` also gets `patches/rebrand/po/id-rebrand.po` |
+| `po/*.po` | translations | the renamed msgids and their translations (PLAN.md §10.3 step 4); every translation of the desktop `Keywords` gets `Software;Store;Warung Aplikasi;Bazaar;GNOME Software;` appended; `po/id.po` also gets `patches/rebrand/po/id-rebrand.po` |
 | new | `src/bz-rebrand.c`, `src/bz-rebrand.h`, the three app icons | from `patches/rebrand/src/` and `patches/rebrand/icons/` |
 | removed | `data/icons/id.blankonlinux.warsi.Source.svg` | Bazaar's logo source; not installed |
 
