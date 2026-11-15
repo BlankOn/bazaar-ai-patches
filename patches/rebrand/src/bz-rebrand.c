@@ -62,7 +62,7 @@ bz_rebrand_about_dialog (AdwAboutDialog *dialog)
   g_return_if_fail (ADW_IS_ABOUT_DIALOG (dialog));
 
   // Translators: Please treat "Bazaar" and "BlankOn" as brand names and avoid translating.
-  note = _ ("Originally Bazaar, heavily patched by BlankOn Linux");
+  note = _ ("Originally Bazaar, patched by BlankOn Linux");
 
   /* AdwAboutDialog has no slot for a line under the name, so find the name
    * label in its header (icon, name, developer, version) and add one after

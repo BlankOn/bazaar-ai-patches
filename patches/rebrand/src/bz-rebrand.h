@@ -29,7 +29,7 @@
 
 G_BEGIN_DECLS
 
-/* Adds "Originally Bazaar, heavily patched by BlankOn Linux" to the About
+/* Adds "Originally Bazaar, patched by BlankOn Linux" to the About
  * dialog, under the application name and above the developer name, so the
  * Bazaar section below it (developer, website, issues, credits, legal)
  * stays as upstream has it. Call after the dialog's properties are set. */

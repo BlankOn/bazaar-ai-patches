@@ -64,8 +64,8 @@ TOKENS = [
 
 META = "data/" + NEW_ID + ".metainfo.xml.in"
 ABOUT_NOTE_HOOK = (
-    "  /* DOWNSTREAM PATCH (Warsi rebrand): \"Originally Bazaar, heavily patched by\n"
-    "   * BlankOn Linux\" under the name; see ai-patches/PLAN.md, \"Rebrand\". */\n"
+    "  /* DOWNSTREAM PATCH (Warsi rebrand): \"Originally Bazaar, patched by BlankOn\n"
+    "   * Linux\" under the name; see ai-patches/PLAN.md, \"Rebrand\". */\n"
     "  bz_rebrand_about_dialog (ADW_ABOUT_DIALOG (dialog));\n\n")
 
 # (relative path after step 1, upstream text, rebranded text). Every
@@ -101,7 +101,7 @@ EDITS = [
     (META, "particularly from Flathub.\n    </p>\n",
      "particularly from Flathub.\n    </p>\n"
      "    <p>\n"
-     "      Warsi is based on Bazaar and heavily patched by BlankOn Linux. Besides\n"
+     "      Warsi is based on Bazaar and patched by BlankOn Linux. Besides\n"
      "      Flatpak apps, it also keeps the system's Debian APT packages up to date.\n"
      "    </p>\n"),
     # About dialog: name, and the note (bz-rebrand.c). Developer, website,

@@ -22,14 +22,14 @@ msgstr ""
 
 #. Translators: Please treat "Bazaar" and "BlankOn" as brand names and avoid translating.
 #: src/bz-rebrand.c:65
-msgid "Originally Bazaar, heavily patched by BlankOn Linux"
-msgstr "Berasal dari Bazaar, dimodifikasi besar-besaran oleh BlankOn Linux"
+msgid "Originally Bazaar, patched by BlankOn Linux"
+msgstr "Dibangun dari Bazaar, dimodifikasi oleh BlankOn Linux"
 
 #: data/id.blankonlinux.warsi.metainfo.xml.in:14
 msgid ""
-"Warsi is based on Bazaar and heavily patched by BlankOn Linux. Besides "
-"Flatpak apps, it also keeps the system's Debian APT packages up to date."
+"Warsi is based on Bazaar and patched by BlankOn Linux. Besides Flatpak apps, "
+"it also keeps the system's Debian APT packages up to date."
 msgstr ""
-"Warsi berbasis Bazaar dan dimodifikasi besar-besaran oleh BlankOn Linux. "
-"Selain aplikasi Flatpak, Warsi juga menjaga paket APT Debian di sistem tetap "
+"Warsi dibangun dari Bazaar dan dimodifikasi oleh BlankOn Linux. Selain "
+"aplikasi Flatpak, Warsi juga menjaga paket APT Debian di sistem tetap "
 "mutakhir."

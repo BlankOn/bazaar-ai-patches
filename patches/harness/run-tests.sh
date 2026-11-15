@@ -118,7 +118,7 @@ r1_rebrand () {
     appstreamcli validate --no-net "$(find "$dest" -name "$APP_ID.metainfo.xml")" >/dev/null || ok=1
   fi
   note="$(LANGUAGE=id msgunfmt "$(find "$dest" -path "*/id/LC_MESSAGES/$GETTEXT_DOMAIN.mo")" | grep -A1 'msgid "Originally Bazaar')"
-  echo "$note" | grep -q "Berasal dari Bazaar" || { echo "MISSING: Indonesian About note"; ok=1; }
+  echo "$note" | grep -q "Dibangun dari Bazaar" || { echo "MISSING: Indonesian About note"; ok=1; }
   [ $ok = 0 ] && echo "rebrand complete: $APP_ID, no Bazaar ID or file name installed, metadata valid"
   return $ok
 }

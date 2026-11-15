@@ -326,9 +326,8 @@ Expected: `Tersedia %u pembaruan sistem dari %s.`
 **Warsi** (`app-about.png`, and the app in T10):
 
 - The About dialog shows the Warsi icon (a striped awning over a "W"),
-  **Warsi**, then **"Originally Bazaar, heavily patched by BlankOn Linux"**
-  (Indonesian: "Berasal dari Bazaar, dimodifikasi besar-besaran oleh
-  BlankOn Linux"), then Bazaar's section unchanged: "The Bazaar
+  **Warsi**, then **"Originally Bazaar, patched by BlankOn Linux"**
+  (Indonesian: "Dibangun dari Bazaar, dimodifikasi oleh BlankOn Linux"), then Bazaar's section unchanged: "The Bazaar
   Contributors", version, Website, Report an Issue, Credits, Legal,
   Acknowledgements.
 - The window title and main menu say Warsi ("About Warsi", "Quit Warsi");

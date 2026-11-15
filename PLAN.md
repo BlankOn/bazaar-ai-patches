@@ -480,7 +480,7 @@ Warsi.
 | Autostart file (system and per user) | `bazaar.desktop` | `warsi.desktop` |
 | Strings naming the app: window title, menu items, desktop and AppStream name, background-permission reason, "new version" banner, Flathub and software-source dialogs, shortcuts, inspector | Bazaar | Warsi |
 | App icon (scalable, development, symbolic) | Bazaar's logo | Warsi's (`patches/rebrand/icons/`) |
-| About dialog | name "Bazaar" | name "Warsi", then **"Originally Bazaar, heavily patched by BlankOn Linux"** (Indonesian: "Berasal dari Bazaar, dimodifikasi besar-besaran oleh BlankOn Linux") |
+| About dialog | name "Bazaar" | name "Warsi", then **"Originally Bazaar, patched by BlankOn Linux"** (Indonesian: "Dibangun dari Bazaar, dimodifikasi oleh BlankOn Linux"; wording changed on 2026-11-15 at the user's request, from "heavily patched" / "Berasal dari … besar-besaran") |
 | AppStream description | | one more paragraph: Warsi is based on Bazaar, patched by BlankOn Linux, and also updates the system's Debian APT packages |
 
 These keep "Bazaar" on purpose:
