@@ -18,14 +18,19 @@ REPO="${BZ_REPO:-$(cd "$HERE/../../.." && pwd)}"
 SRC="$(cd "${BZ_APT_SRC:-$REPO/src}" && pwd)"
 OUT="${1:-$REPO/build/apt-harness}"
 
+# app ID, programs and text domain of the tree (Bazaar, or Warsi once rebranded)
+. "$HERE/brand.sh"
+# the card's resource path, from the sources being compiled
+PREFIX="$(sed -n 's|.*"\(/[^"]*\)/bz-apt-updates-card.ui".*|\1|p' "$SRC/bz-apt-updates-card.c")"
+
 mkdir -p "$OUT"
 cd "$OUT"
 
-printf '#define GETTEXT_PACKAGE "bazaar"\n' > config.h
-cat > res.xml <<'EOF'
+printf '#define GETTEXT_PACKAGE "%s"\n' "$GETTEXT_DOMAIN" > config.h
+cat > res.xml <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-  <gresource prefix="/io/github/kolunmi/Bazaar">
+  <gresource prefix="$PREFIX">
     <file>bz-apt-updates-card.ui</file>
   </gresource>
 </gresources>

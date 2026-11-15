@@ -1,8 +1,15 @@
-# PLAN: APT system updates for Bazaar
+# PLAN: APT system updates for Bazaar, rebranded as Warsi
 
 This is the **main entry point** for the downstream patch. It explains what
 the patch achieves, how it is built, and how to (re-)apply it to any version
-of the Bazaar codebase. It is written for humans **and** AI agents, on any
+of the Bazaar codebase. The patch has two parts, applied in this order:
+
+1. **APT system updates** (sections 1–9): the System Updates card and the
+   "updates available" notifications, as hooks H1–H12.
+2. **Rebrand to Warsi** ([§10](#10-rebrand-warsi)): turns the patched Bazaar
+   into **Warsi** (`id.blankonlinux.warsi`), BlankOn Linux's app store, with
+   one script, `patches/rebrand/rebrand.py`.
+ It is written for humans **and** AI agents, on any
 machine, at any later time.
 
 | Document | Read it for |
@@ -11,7 +18,7 @@ machine, at any later time.
 | [`API.md`](API.md) | every external API the patch relies on, the base commit, and how to check each API for breaking changes upstream |
 | [`DIFF.md`](DIFF.md) | every change to **existing** upstream files: what, why, and how it connects to the new files |
 | [`TEST.md`](TEST.md) | how to test the patch once applied: automated tests, screenshots, manual tests, running the app |
-| `patches/` | the **master copies** of every entirely new file written by the patch |
+| `patches/` | the **master copies** of every entirely new file written by the patch; `patches/rebrand/` holds the rebrand script, its code, icons and translations |
 
 > **If you are an AI agent asked to apply or re-apply this patch:** read all
 > four documents fully before changing anything, then follow
@@ -266,17 +273,32 @@ merge the translations (H12):
 python3 ai-patches/patches/po/merge-translations.py
 ```
 
+### 5.3a Rebrand to Warsi (step R, last)
+
+```bash
+python3 ai-patches/patches/rebrand/rebrand.py
+```
+
+Run it after H1–H12, on the patched Bazaar tree. It renames files, IDs,
+programs and strings and adds the About note (details in
+[§10](#10-rebrand-warsi), DIFF.md "R"). If upstream changed a string it
+rewrites, it stops with a message naming that edit; update the edit in
+`rebrand.py` (`EDITS`, and `RENAMED` for a translated string) and run it
+again. Running it twice changes nothing; `--check` reports what it would
+still change.
+
 ### 5.4 Build and verify
 
 Follow [TEST.md](TEST.md) (summary in [§6 Verification](#6-verification)).
 Minimum bar: `ai-patches/patches/harness/run-tests.sh --notify` passes
-T1–T7 and the screenshots match the reference.
+T1–T7 (and R1 on a rebranded tree) and the screenshots match the reference.
 
 ### 5.5 Record the attempt
 
-Append a row to [§10 Attempt log](#10-attempt-log) (date, upstream commit,
+Append a row to [§11 Attempt log](#11-attempt-log) (date, upstream commit,
 result, notes). If you changed anything in `patches/src/`, keep the master
-copies and the applied copies identical:
+copies and the applied copies identical (on a rebranded tree, T1 compares
+them through `rebrand.py --filter`, since the masters stay Bazaar-branded):
 
 ```bash
 for f in ai-patches/patches/src/* ai-patches/patches/data/*; do cmp "$f" "$(basename "$(dirname "$f")")/$(basename "$f")" || echo "OUT OF SYNC: $f"; done
@@ -310,6 +332,7 @@ Testing is described step by step in **[TEST.md](TEST.md)**. In short:
    | T5 | harness screenshots, collapsed and expanded |
    | T6 | `app-shot.sh`: screenshots of the **real app's** Library page |
    | T7 | (`--notify` only) the update worker counts Flatpak and APT updates and sends the "updates available" notification; this puts a real notification on the desktop |
+   | R1 | (rebranded tree only) `rebrand.py --check` has nothing left to do; a `meson install` into a temporary directory contains no Bazaar app ID or `bazaar` file name, installs every Warsi file, passes `desktop-file-validate` and `appstreamcli validate`, and has the Indonesian About note |
 
 3. T8: compare the screenshots in `build/apt-tests/` with
    [`patches/harness/expected-library-page.png`](patches/harness/expected-library-page.png),
@@ -327,7 +350,8 @@ Test tooling lives in `patches/harness/` and is never copied into `src/`:
 | `build.sh`, `harness.c` | standalone window with only the card (`HARNESS_LOCALEDIR` for translations) |
 | `check-counts.py` | T4 count comparison |
 | `app-shot.sh`, `app-shot.c` | `LD_PRELOAD` shim that screenshots the real app |
-| `run-tests.sh` | runs T1–T6 (T7 with `--notify`) and prints a summary |
+| `brand.sh` | sourced by the scripts: reads the app ID, program name and text domain from `meson.build`, so every test works on Bazaar and on Warsi |
+| `run-tests.sh` | runs T1–T6 (T7 with `--notify`, R1 on a rebranded tree) and prints a summary |
 | `expected-library-page.png` | reference screenshot of the real Library page |
 
 ## 7. Runtime requirements and packaging
@@ -342,7 +366,9 @@ Test tooling lives in `patches/harness/` and is never copied into `src/`:
 
 Packaging: the build now also installs
 `$sysconfdir/xdg/autostart/bazaar.desktop` (hook H11); a Debian package
-must list `etc/xdg/autostart/bazaar.desktop` in its `.install` file.
+must list `etc/xdg/autostart/bazaar.desktop` in its `.install` file. After
+the rebrand every installed name changes; see
+[§10.4](#104-packaging-a-rebranded-build).
 
 Flatpak builds need D-Bus permissions (DIFF.md hook H6). The **Flathub**
 Bazaar does not have them, so the card stays hidden there. They can be
@@ -426,7 +452,130 @@ GLib), not `libpackagekit-glib2`.
 - `clang-format` was not available when the code was written; formatting
   was done by hand following `.clang-format`.
 
-## 10. Attempt log
+## 10. Rebrand: Warsi
+
+### 10.1 Goal
+
+On 2026-11-15 the user decided to ship the patched Bazaar as **Warsi**,
+BlankOn Linux's app store, with its own app ID, `id.blankonlinux.warsi`.
+Bazaar's license (GPL-3.0-or-later) allows this: the license doesn't require
+keeping the name, the copyright notices stay, the source stays available,
+and the About dialog says where Warsi comes from.
+
+This is a full rebrand, not just a new display name. With its own app ID,
+the desktop treats Warsi as a separate app. It installs next to Flathub's or
+Debian's Bazaar and shares nothing with it: no settings, D-Bus names, search
+provider, notifications or autostart file. Clicking a notification opens
+Warsi.
+
+### 10.2 What changes
+
+| What | Bazaar | Warsi |
+|---|---|---|
+| App ID: GApplication, D-Bus names, desktop file, AppStream ID, GSettings schema, icons, systemd unit, search provider, cache/data directories, keyring schema | `io.github.kolunmi.Bazaar` | `id.blankonlinux.warsi` |
+| Resource and GSettings path | `/io/github/kolunmi/Bazaar` | `/id/blankonlinux/warsi` |
+| Programs | `bazaar`, `bazaar-daemon`, `bazaar-dl-worker` | `warsi`, `warsi-daemon`, `warsi-dl-worker` |
+| Login page module | `$libdir/bazaar/libbazaar-login-page.so` | `$libdir/warsi/libwarsi-login-page.so` |
+| Gettext domain, Meson project | `bazaar` | `warsi` |
+| Autostart file (system and per user) | `bazaar.desktop` | `warsi.desktop` |
+| Strings naming the app: window title, menu items, desktop and AppStream name, background-permission reason, "new version" banner, Flathub and software-source dialogs, shortcuts, inspector | Bazaar | Warsi |
+| App icon (scalable, development, symbolic) | Bazaar's logo | Warsi's (`patches/rebrand/icons/`) |
+| About dialog | name "Bazaar" | name "Warsi", then **"Originally Bazaar, heavily patched by BlankOn Linux"** (Indonesian: "Berasal dari Bazaar, dimodifikasi besar-besaran oleh BlankOn Linux") |
+| AppStream description | | one more paragraph: Warsi is based on Bazaar, patched by BlankOn Linux, and also updates the system's Debian APT packages |
+
+These keep "Bazaar" on purpose:
+- **The About dialog's section below the note**: developer "The Bazaar
+  Contributors", website, "Report an Issue", credits, legal and
+  acknowledgements. The user asked for this on 2026-11-15.
+- **The AppStream developer name and links, and the copyright lines.**
+- **The donation dialog, banner button and menu item** ("Donate to Bazaar",
+  Bazaar's release notes). They support upstream's developer.
+- **Internal names users never see**: types and files (`BzWindow`,
+  `bazaar-daemon.c`), log domains `BAZAAR::…`, and the `bazaar-hook://`
+  content scheme.
+- **`libbge`**, a library with its own name.
+- **`build-aux/`, `README.md`, `docs/` and CI**: upstream's Flatpak and
+  development tooling.
+
+### 10.3 How the script works
+
+`patches/rebrand/rebrand.py` only touches `meson.build`, `src/`, `data/` and `po/`. It runs these steps:
+
+1. **Renames files** named after the app ID.
+2. **Replaces names in every text file** (`TOKENS`): the app ID, the
+   resource path and the program names. It also changes translator
+   comments to `Please treat "Warsi" and "Bazaar" as brand names`.
+3. **Applies `EDITS`.** Each edit names a file, the **exact upstream text**
+   and its replacement.
+   - If the text isn't found (upstream changed it), the script stops and
+     names the edit's file and text.
+   - Insertions are skipped once present: the About hook, the new source
+     file in `src/meson.build` and `po/POTFILES.in`, and the AppStream
+     paragraph.
+4. **Renames translated strings.** The `RENAMED` msgids change "Bazaar" →
+   "Warsi" in every `po/<lang>.po`, so no translation is lost. In each
+   translation:
+   - a whole-word "Bazaar" becomes "Warsi";
+   - a translation that names the app another way (Spanish "Bazar",
+     Ukrainian "Базару", Serbian "Пијаца", Polish "Bazaaru") is marked
+     **fuzzy**, so it shows in English until a translator updates it;
+   - a translation that doesn't name the app ("About the app") is kept.
+
+   On 2026-11-15 this marked 86 translations in 15 languages fuzzy, none in
+   Indonesian.
+5. **Adds the new files.** It copies `patches/rebrand/src/bz-rebrand.{c,h}`
+   and the icons, removes Bazaar's icon source (`….Source.svg`), and merges
+   `patches/rebrand/po/id-rebrand.po` with `merge-translations.py`.
+6. **Checks the result.** It fails if the old app ID is still anywhere in
+   scope, or if a `.po` file no longer passes `msgfmt -c`.
+
+**The About note.** libadwaita's `AdwAboutDialog` has no property for a line
+under the name. Its `comments` property would replace the "Website" row
+with a "Details" row, which changes the Bazaar section the user wanted kept.
+So `bz_rebrand_about_dialog ()` finds the name label in the dialog's header
+and adds a label after it. If a libadwaita release changes that layout, it
+falls back to `comments` (API.md §3.5).
+
+**Why a script and not a diff.** The rename touches about 150 files and
+about 1,000 lines, most of them a resource path in every widget. A diff of
+that would conflict with nearly every upstream change. Instead the script is
+re-run on a fresh upstream tree after H1–H12, and only its `EDITS` need care
+when upstream rewords a string.
+
+**Updating to a new upstream.** Start from upstream (not from a rebranded
+commit), apply H1–H12, then run the script. Merging upstream into a
+rebranded branch also works, but it conflicts on renamed files and strings.
+
+### 10.4 Packaging a rebranded build
+
+A Debian package of Warsi installs different files (R1 lists them):
+- `/usr/bin/warsi`, `/usr/bin/warsi-daemon`, `/usr/bin/warsi-dl-worker`;
+- `/usr/lib/<triplet>/warsi/libwarsi-login-page.so`;
+- `/etc/xdg/autostart/warsi.desktop`;
+- `id.blankonlinux.warsi.*` desktop, AppStream, D-Bus, systemd, search
+  provider, schema and icon files;
+- translations as `warsi.mo`.
+
+The source and binary packages would be named `warsi`. No installed file is
+shared with Debian's `bazaar` package any more, except in the `libbge`
+packages, which are unchanged. So the two can be installed together without
+`Conflicts` or `Replaces`.
+
+### 10.5 Limitations
+
+- Settings, the Flathub sign-in (keyring entry), caches and the per-user
+  autostart file are stored under the new ID. Nothing carries over from an
+  installed Bazaar and there is no migration: Warsi starts fresh.
+- 86 translations in 15 languages stay fuzzy until their translators adapt
+  "Warsi". Indonesian is complete.
+- The Warsi icon was drawn for this patch: a market stall's awning over a
+  "W", in BlankOn blue. Replace `patches/rebrand/icons/*.svg` with BlankOn's
+  artwork when there is one.
+- The About dialog's "Report an Issue" still points at upstream's tracker,
+  as the user asked. Reports about the APT card or notifications belong to
+  BlankOn.
+
+## 11. Attempt log
 
 Append one row per attempt. Never delete rows.
 
@@ -436,3 +585,4 @@ Append one row per attempt. Never delete rows.
 | 2026-11-14 | `9560ad18cd60652aae10e81708ff4d36df775aa8` | 0.10.1 (`v0.10.0-29-g9560ad18`) | ✅ Re-applied from `../bazaar-ai-patches` onto clean tree; `git apply --3way` clean, harness + full build with no warnings, harness card shows 1457 updates | Same base commit, so API check trivial. Install buttons not exercised. |
 | 2026-11-14 | `9560ad18cd60652aae10e81708ff4d36df775aa8` | 0.10.1 (`v0.10.0-29-g9560ad18`) | ✅ Count fix + TEST.md; `run-tests.sh` T1–T6 all PASS, real app screenshot taken | Card said 1457 updates vs apt's 1393: PackageKit's `GetUpdates` also lists 61 new and 3 removed packages. Title now counts upgrades only (1393 = apt), subtitle/list show new and removed packages. Added TEST.md, `run-tests.sh`, `check-counts.py`, `app-shot.{sh,c}`, harness `HARNESS_EXPAND`/`HARNESS_HEIGHT`; refreshed `expected-library-page.png`. `pkcon` unavailable on BlankOn, replaced by PackageKit Python bindings. Install buttons not exercised. |
 | 2026-11-15 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (applied on top of the user's commit `3c12e48a`) | 0.10.1 | ✅ Notifications + "Debian APT" + Indonesian; `run-tests.sh --notify` T1–T7 all PASS | New: `bz-update-notifier.{c,h}`, `patches/data/bazaar-update-notifications.desktop`, `patches/po/{id-apt-updates.po,merge-translations.py}`; hooks H7–H12; `BzAptUpdates:loaded`. Real notification seen via org.gtk.Notifications (4 apps, 1393 system); `app.open-library` switched a running window to Library; daemon stays alive only with `update-notifications` on; daily limit and off switch verified. DIFF.md applied to a clean base checkout reproduces the tree byte for byte. Scripts take `BZ_REPO` so they run from `../bazaar-ai-patches`. Not tested: notification click on an installed (packaged) build; login autostart. |
+| 2026-11-15 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `e90c8f37`) | 0.10.1 | ✅ Rebrand to Warsi (`id.blankonlinux.warsi`), step R; `run-tests.sh --notify` with R1 | New: `patches/rebrand/` (`rebrand.py`, `bz-rebrand.{c,h}`, icons, `po/id-rebrand.po`), `patches/harness/brand.sh`; `merge-translations.py` takes fragment arguments; app-shot gains `APP_SHOT_ABOUT`. `rebrand.py --check` clean after one run; installed tree has no Bazaar ID or file name; desktop file and AppStream valid; About dialog shows the note above Bazaar's section (screenshot). 86 translations in 15 languages marked fuzzy (none Indonesian). Uninstalled, T7's notification goes through the portal (no desktop file for the new ID). Not tested: an installed Warsi (notification click, autostart, GNOME search provider). |

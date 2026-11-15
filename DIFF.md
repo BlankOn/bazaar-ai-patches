@@ -11,6 +11,13 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 - Every hook except the JSON manifest carries the marker
   `DOWNSTREAM PATCH (APT system updates)`; find them with
   `git grep -n "DOWNSTREAM PATCH (APT system updates)"`.
+- Then the **rebrand to Warsi** (step R, last) changes about 150 more files.
+  It is a script, not hooks: see [R](#r-rebrand-to-warsi-script-no-diff).
+  Its own code changes carry `DOWNSTREAM PATCH (Warsi rebrand)`.
+- The hooks below show the **Bazaar** names (`io.github.kolunmi.Bazaar`,
+  `bazaar-daemon`, `bazaar.desktop`), as they are applied to upstream. On a
+  rebranded tree the same lines read `id.blankonlinux.warsi`,
+  `warsi-daemon` and `warsi.desktop`.
 
 ## Overview: how upstream connects to the new files
 
@@ -52,7 +59,7 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 | H11 | `data/meson.build` | `patches/data/bazaar-update-notifications.desktop` |
 | H12 | `po/id.po` | `patches/po/id-apt-updates.po` (script, no diff) |
 
-Apply order: H1 → H12. H1–H4 are required for the card; H7–H11 for the
+Apply order: H1 → H12, then R. H1–H4 are required for the card; H7–H11 for the
 notifications (H7, H9, H10 together; H8 and H11 make them arrive without
 upstream's auto-update); H5 and H12 for translations; H6 only matters for
 Flatpak builds.
@@ -445,6 +452,48 @@ and running it again adds nothing. TEST.md T1 checks it was run.
 H5. Adding a translatable string to the patch means adding its translation
 to `patches/po/id-apt-updates.po`. A fragment for another language is a
 file `patches/po/<lang>-apt-updates.po`; the script picks it up.
+
+---
+
+## R: rebrand to Warsi (script, no diff)
+
+**Why:** the user decided on 2026-11-15 to ship the patched Bazaar as Warsi
+(`id.blankonlinux.warsi`). See PLAN.md §10.
+
+**Change:** not a diff. After H1–H12, from the repository root:
+
+```bash
+python3 ai-patches/patches/rebrand/rebrand.py
+```
+
+`--check` exits 1 and lists the files it would still change. The script
+changes only `meson.build`, `src/`, `data/` and `po/`:
+
+| Step | Files | Change |
+|---|---|---|
+| rename | 17 files named `io.github.kolunmi.Bazaar.*` (data files, D-Bus services, icons, login icons) | `id.blankonlinux.warsi.*` |
+| tokens | every text file | `io.github.kolunmi.Bazaar` → `id.blankonlinux.warsi`, `/io/github/kolunmi/Bazaar` → `/id/blankonlinux/warsi`, `bazaar-daemon` → `warsi-daemon` (not `bazaar-daemon.c`), `bazaar-dl-worker`, `bazaar-host-bwrap`, `bazaar-login-page` → `warsi-…`; translator comments name both brands |
+| `meson.build` | project, gettext domain, programs | `project('warsi'`, `GETTEXT_PACKAGE 'warsi'`, `bazaar_bin_name = 'warsi'`, `$libdir/warsi`, `$datadir/warsi` |
+| `po/meson.build` | gettext domain | `i18n.gettext('warsi'` |
+| `src/meson.build`, `po/POTFILES.in` | new source | `bz-rebrand.c` after `bz-application.c` |
+| `src/bz-application.c` | About dialog | `#include "bz-rebrand.h"`; `"application-name", "Warsi"`; `bz_rebrand_about_dialog (ADW_ABOUT_DIALOG (dialog));` before `adw_dialog_present`; the Flathub dialog names Warsi |
+| `src/bz-window.blp`, `src/bz-window.c`, `src/shortcuts-dialog.blp`, `src/bz-bundle-install-dialog.blp`, `src/bz-preferences-dialog.c`, `src/bz-inspector.c` | strings naming the app | "Bazaar" → "Warsi" (window title, About/Quit menu items, "new version" banner, removal guard, shortcut, software-source dialog, background reason, inspector page) |
+| `src/bazaar.gresource.xml`, `src/bz-preferences-dialog.c`, `src/bazaar-autostart.desktop` | per-user autostart | `warsi.desktop`, `Name=Warsi` |
+| `data/meson.build`, `data/bazaar-update-notifications.desktop` | system autostart (H11) | installed as `warsi.desktop`, `Name=Warsi` |
+| `data/id.blankonlinux.warsi.desktop.in` | desktop file | `Name=Warsi` |
+| `data/id.blankonlinux.warsi.metainfo.xml.in` | AppStream | `<name>Warsi</name>`, gettext domain `warsi`, one more description paragraph |
+| `po/*.po` | translations | the renamed msgids and their translations (PLAN.md §10.3 step 4); `po/id.po` also gets `patches/rebrand/po/id-rebrand.po` |
+| new | `src/bz-rebrand.c`, `src/bz-rebrand.h`, the three app icons | from `patches/rebrand/src/` and `patches/rebrand/icons/` |
+| removed | `data/icons/id.blankonlinux.warsi.Source.svg` | Bazaar's logo source; not installed |
+
+Each edit names the exact upstream text it replaces (`EDITS` in the
+script). When that text is missing, the script stops and names it: update
+the edit to the new upstream text, and if the string is translated, the
+matching entry in `RENAMED`.
+
+**Connection:** `bz_rebrand_about_dialog ()` (`bz-rebrand.c`) is the only
+new code. Everything else is renaming, which also renames the names the
+APT hooks use (H8's `gsettings get`, H10's schema, H11's autostart file).
 
 ---
 

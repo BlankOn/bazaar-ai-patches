@@ -11,6 +11,9 @@
 # Needs python3 and gettext (msgattrib, msgcat, msgfmt).
 # Usage, from the repository root:  python3 ai-patches/patches/po/merge-translations.py
 # BZ_REPO=/path/to/bazaar selects another tree.
+# Fragment files given as arguments are merged instead of *-apt-updates.po
+# (the rebrand merges patches/rebrand/po/<lang>-rebrand.po this way); the
+# language is the file name up to the first "-".
 
 import glob
 import os
@@ -58,8 +61,9 @@ def drop_obsolete(text, ids):
 
 
 def main():
-    for frag in sorted(glob.glob(os.path.join(HERE, "*-apt-updates.po"))):
-        lang = os.path.basename(frag)[: -len("-apt-updates.po")]
+    frags = sys.argv[1:] or sorted(glob.glob(os.path.join(HERE, "*-apt-updates.po")))
+    for frag in frags:
+        lang = os.path.basename(frag).split("-")[0]
         target = os.path.join(REPO, "po", lang + ".po")
         if not os.path.exists(target):
             print(f"skip {lang}: no {target}")

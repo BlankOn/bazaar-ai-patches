@@ -1,10 +1,10 @@
 #!/bin/sh
 # DOWNSTREAM PATCH (APT system updates): run every automated test in
-# ai-patches/TEST.md (T1-T7) in order.
+# ai-patches/TEST.md (T1-T7, and R1 on a Warsi-rebranded tree) in order.
 # Never installs or removes packages, never reboots.
 #
 # Usage:  ai-patches/patches/harness/run-tests.sh [--no-app] [--notify]
-#   --no-app  skip T6 (needs a full build and no running Bazaar)
+#   --no-app  skip T6 (needs a full build and no running Bazaar/Warsi)
 #   --notify  also run T7: sends a real "updates available" notification to
 #             the desktop and records it in the last-update-notification
 #             setting (so the daily notification may skip a day)
@@ -22,6 +22,8 @@ FAILED=0
 
 cd "$REPO" || exit 2
 mkdir -p "$OUT"
+. "$HERE/brand.sh"   # APP_ID, APP_BIN, GETTEXT_DOMAIN, REBRANDED
+REBRAND="$AP/patches/rebrand/rebrand.py"
 
 step () {  # step ID "description" command...
   id="$1"; desc="$2"; shift 2
@@ -36,22 +38,36 @@ step () {  # step ID "description" command...
 
 t1_static () {
   ok=0
-  for f in "$AP"/patches/src/* "$AP"/patches/data/*; do
+  masters="$AP/patches/src/* $AP/patches/data/*"
+  [ $REBRANDED = 1 ] && masters="$masters $AP/patches/rebrand/src/*"
+  for f in $masters; do
     rel="$(basename "$(dirname "$f")")/$(basename "$f")"
-    cmp -s "$f" "$rel" || { echo "OUT OF SYNC: $f vs $rel"; ok=1; }
+    if [ $REBRANDED = 1 ]; then
+      # the masters are Bazaar's; compare them as the rebrand turns them out
+      python3 -I "$REBRAND" --filter "$f" "$rel" | cmp -s - "$rel" || { echo "OUT OF SYNC: $f vs $rel (after rebrand)"; ok=1; }
+    else
+      cmp -s "$f" "$rel" || { echo "OUT OF SYNC: $f vs $rel"; ok=1; }
+    fi
   done
   for f in src/meson.build src/bazaar.gresource.xml src/bz-library-page.c src/bz-library-page.blp po/POTFILES.in \
            src/update-worker.c src/bazaar-daemon.c src/bz-application.c \
-           data/meson.build data/io.github.kolunmi.Bazaar.gschema.xml data/bazaar-update-notifications.desktop \
+           data/meson.build "data/$APP_ID.gschema.xml" data/bazaar-update-notifications.desktop \
            src/bz-apt-updates.h src/bz-apt-updates.c src/bz-apt-updates-card.h src/bz-apt-updates-card.c src/bz-apt-updates-card.blp \
            src/bz-update-notifier.h src/bz-update-notifier.c; do
     grep -q "DOWNSTREAM PATCH (APT system updates)" "$f" || { echo "MISSING MARKER: $f"; ok=1; }
   done
-  # translations merged (H12): the merge script has nothing left to add
-  for frag in "$AP"/patches/po/*-apt-updates.po; do
-    lang="$(basename "$frag" -apt-updates.po)"
+  if [ $REBRANDED = 1 ]; then
+    for f in src/bz-rebrand.h src/bz-rebrand.c src/bz-application.c src/meson.build; do
+      grep -q "DOWNSTREAM PATCH (Warsi rebrand)" "$f" || { echo "MISSING REBRAND MARKER: $f"; ok=1; }
+    done
+  fi
+  # translations merged (H12, and R on a rebranded tree): nothing left to add
+  frags="$(ls "$AP"/patches/po/*-apt-updates.po)"
+  [ $REBRANDED = 1 ] && frags="$frags $(ls "$AP"/patches/rebrand/po/*.po)"
+  for frag in $frags; do
+    lang="$(basename "$frag" | cut -d- -f1)"
     cp "po/$lang.po" "$OUT/$lang.po.before"
-    BZ_REPO="$REPO" python3 -I "$AP/patches/po/merge-translations.py" >/dev/null
+    BZ_REPO="$REPO" python3 -I "$AP/patches/po/merge-translations.py" "$frag" >/dev/null
     if ! cmp -s "po/$lang.po" "$OUT/$lang.po.before"; then
       echo "TRANSLATIONS NOT MERGED: po/$lang.po (run patches/po/merge-translations.py)"
       cp "$OUT/$lang.po.before" "po/$lang.po"
@@ -72,12 +88,39 @@ t2_harness () {
 
 t3_full_build () {
   [ -d build ] && [ -f build/build.ninja ] || meson setup build >/dev/null || return 1
-  touch src/bz-apt-updates.c src/bz-apt-updates-card.c src/bz-library-page.c
+  touch src/bz-apt-updates.c src/bz-apt-updates-card.c src/bz-library-page.c src/bz-update-notifier.c
+  [ $REBRANDED = 1 ] && touch src/bz-rebrand.c
   log="$(ninja -C build 2>&1)" || { echo "$log" | tail -20; return 1; }
-  if echo "$log" | grep -iE "bz-apt-updates|bz-library-page" | grep -iqE "warning|error"; then
+  if echo "$log" | grep -iE "bz-apt-updates|bz-library-page|bz-update-notifier|bz-rebrand" | grep -iqE "warning|error"; then
     echo "$log" | grep -iE "warning|error"; return 1
   fi
   echo "full build ok, no warnings from the patch's files"
+}
+
+r1_rebrand () {
+  ok=0
+  python3 -I "$REBRAND" --check >/dev/null 2>&1 || { python3 -I "$REBRAND" --check 2>/dev/null | head; echo "REBRAND INCOMPLETE: run patches/rebrand/rebrand.py"; ok=1; }
+  dest="$OUT/install"
+  rm -rf "$dest"
+  DESTDIR="$dest" meson install -C build --no-rebuild >/dev/null 2>&1 || { echo "meson install failed"; return 1; }
+  # bge-demo is libbge's demo program (not Warsi); it embeds upstream's docs
+  left="$(grep -rlE "io\.github\.kolunmi\.Bazaar|io/github/kolunmi/Bazaar" "$dest" | grep -v "/bge-demo$"; find "$dest" -iname "*bazaar*")"
+  [ -z "$left" ] || { echo "OLD NAME LEFT IN THE INSTALLED TREE:"; echo "$left"; ok=1; }
+  for f in bin/warsi bin/warsi-daemon bin/warsi-dl-worker etc/xdg/autostart/warsi.desktop \
+           "share/applications/$APP_ID.desktop" "share/metainfo/$APP_ID.metainfo.xml" \
+           "share/glib-2.0/schemas/$APP_ID.gschema.xml" "share/icons/hicolor/scalable/apps/$APP_ID.svg" \
+           "share/icons/hicolor/symbolic/apps/$APP_ID-symbolic.svg" "share/dbus-1/services/$APP_ID.service" \
+           "share/locale/id/LC_MESSAGES/$GETTEXT_DOMAIN.mo"; do
+    [ -n "$(find "$dest" -path "*/$f")" ] || { echo "NOT INSTALLED: $f"; ok=1; }
+  done
+  desktop-file-validate "$(find "$dest" -name "$APP_ID.desktop")" || ok=1
+  if command -v appstreamcli >/dev/null; then
+    appstreamcli validate --no-net "$(find "$dest" -name "$APP_ID.metainfo.xml")" >/dev/null || ok=1
+  fi
+  note="$(LANGUAGE=id msgunfmt "$(find "$dest" -path "*/id/LC_MESSAGES/$GETTEXT_DOMAIN.mo")" | grep -A1 'msgid "Originally Bazaar')"
+  echo "$note" | grep -q "Berasal dari Bazaar" || { echo "MISSING: Indonesian About note"; ok=1; }
+  [ $ok = 0 ] && echo "rebrand complete: $APP_ID, no Bazaar ID or file name installed, metadata valid"
+  return $ok
 }
 
 t4_counts () {
@@ -95,25 +138,27 @@ t5_harness_shots () {
 t6_app () {
   "$HERE/app-shot.sh" "$OUT/app-library.png" 40 2>&1 | grep -E "APT-DEBUG|Saved|already running|^no " &&
   APP_SHOT_EXPAND=1 "$HERE/app-shot.sh" "$OUT/app-library-expanded.png" 40 2>&1 | grep -E "Saved" &&
+  { [ $REBRANDED = 0 ] || APP_SHOT_ABOUT=1 "$HERE/app-shot.sh" "$OUT/app-about.png" 20 2>&1 | grep -E "Saved"; } &&
   [ -s "$OUT/app-library.png" ]
 }
 
 t7_notify () {
   mkdir -p build/schemas
-  cp data/io.github.kolunmi.Bazaar.gschema.xml build/schemas/ && glib-compile-schemas build/schemas || return 1
+  cp "data/$APP_ID.gschema.xml" build/schemas/ && glib-compile-schemas build/schemas || return 1
   log="$(GSETTINGS_SCHEMA_DIR="$REPO/build/schemas" BAZAAR_NOTIFY_NOW=1 G_MESSAGES_DEBUG="BAZAAR::NOTIFY BAZAAR::APT" \
-         timeout 400 build/src/bazaar --run-update-worker 2>&1)"
+         timeout 400 "build/src/$APP_BIN" --run-update-worker 2>&1)"
   echo "$log" | grep -E "Pending updates|Sent the update notification|Failed to send|disabled"
   echo "$log" | grep -q "Sent the update notification" || echo "$log" | grep -q "Pending updates: 0 apps, 0 system"
 }
 
 step T1 "static checks (sync, markers, translations, manifest)" t1_static
 step T2 "standalone harness builds with -Werror" t2_harness
-step T3 "full Bazaar build, no patch warnings" t3_full_build
+step T3 "full $APP_BIN build, no patch warnings" t3_full_build
+[ $REBRANDED = 1 ] && step R1 "Warsi rebrand complete and installs cleanly" r1_rebrand
 step T4 "card counts match PackageKit and apt" t4_counts
 step T5 "harness screenshots" t5_harness_shots
 case " $* " in *" --no-app "*) ;; *)
-  step T6 "real Bazaar app: Library page screenshots" t6_app ;;
+  step T6 "real $APP_BIN app: Library page (and About) screenshots" t6_app ;;
 esac
 case " $* " in *" --notify "*)
   step T7 "update worker sends the updates-available notification" t7_notify ;;

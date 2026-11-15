@@ -1,0 +1,35 @@
+# DOWNSTREAM PATCH (Warsi rebrand): Indonesian translations of the strings
+# the rebrand adds (see ai-patches/PLAN.md, "Rebrand"). Merged into po/id.po
+# by rebrand.py; translations already in po/id.po take precedence.
+# Strings the rebrand only renames (Bazaar -> Warsi) need nothing here:
+# rebrand.py renames them in every po/<lang>.po.
+# Copyright (C) 2026 BlankOn Linux
+# This file is distributed under the same license as the warsi package.
+# Herpiko Dwi Aguno <herpiko@gmail.com>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: warsi\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-11-15 12:00+0700\n"
+"Last-Translator: Herpiko Dwi Aguno <herpiko@gmail.com>\n"
+"Language-Team: Indonesian\n"
+"Language: id\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. Translators: Please treat "Bazaar" and "BlankOn" as brand names and avoid translating.
+#: src/bz-rebrand.c:65
+msgid "Originally Bazaar, heavily patched by BlankOn Linux"
+msgstr "Berasal dari Bazaar, dimodifikasi besar-besaran oleh BlankOn Linux"
+
+#: data/id.blankonlinux.warsi.metainfo.xml.in:14
+msgid ""
+"Warsi is based on Bazaar and heavily patched by BlankOn Linux. Besides "
+"Flatpak apps, it also keeps the system's Debian APT packages up to date."
+msgstr ""
+"Warsi berbasis Bazaar dan dimodifikasi besar-besaran oleh BlankOn Linux. "
+"Selain aplikasi Flatpak, Warsi juga menjaga paket APT Debian di sistem tetap "
+"mutakhir."

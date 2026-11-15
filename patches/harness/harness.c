@@ -10,7 +10,7 @@
  *   HARNESS_DELAY=20                  seconds to wait before the screenshot
  *   HARNESS_EXPAND=1                  expand the package list 2 s before the screenshot
  *   HARNESS_HEIGHT=640                window height in pixels
- *   HARNESS_LOCALEDIR=/path           load translations (bazaar.mo) from there,
+ *   HARNESS_LOCALEDIR=/path           load translations (bazaar.mo, or HARNESS_DOMAIN.mo) from there,
  *                                     e.g. with LANGUAGE=id
  */
 
@@ -122,9 +122,11 @@ main (int    argc,
 
   if (g_getenv ("HARNESS_LOCALEDIR") != NULL)
     {
-      bindtextdomain ("bazaar", g_getenv ("HARNESS_LOCALEDIR"));
-      bind_textdomain_codeset ("bazaar", "UTF-8");
-      textdomain ("bazaar");
+      const char *domain = g_getenv ("HARNESS_DOMAIN") != NULL ? g_getenv ("HARNESS_DOMAIN") : "bazaar";
+
+      bindtextdomain (domain, g_getenv ("HARNESS_LOCALEDIR"));
+      bind_textdomain_codeset (domain, "UTF-8");
+      textdomain (domain);
     }
 
   app = adw_application_new ("io.github.kolunmi.BazaarAptHarness", G_APPLICATION_NON_UNIQUE);

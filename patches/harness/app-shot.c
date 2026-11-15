@@ -20,7 +20,11 @@
 
 #include <adwaita.h>
 
-static int ticks = 0;
+static int           ticks     = 0;
+/* Created when the window first shows and kept: a paintable created only
+ * at screenshot time came out empty while the About dialog was open, one
+ * that watched the window from the start did not. */
+static GdkPaintable *paintable = NULL;
 
 static void
 expand_apt_card (GtkWidget *widget,
@@ -36,11 +40,10 @@ expand_apt_card (GtkWidget *widget,
     expand_apt_card (child, inside);
 }
 
-static void
+static gboolean
 save_png (GtkWidget  *window,
           const char *path)
 {
-  GdkPaintable  *paintable = NULL;
   GtkSnapshot   *snapshot  = NULL;
   GskRenderNode *node      = NULL;
   GdkTexture    *texture   = NULL;
@@ -50,7 +53,6 @@ save_png (GtkWidget  *window,
 
   width     = gtk_widget_get_width (window);
   height    = gtk_widget_get_height (window);
-  paintable = gtk_widget_paintable_new (window);
   snapshot  = gtk_snapshot_new ();
   gdk_paintable_snapshot (paintable, snapshot, width, height);
   node    = gtk_snapshot_free_to_node (snapshot);
@@ -60,7 +62,18 @@ save_png (GtkWidget  *window,
   gsk_renderer_realize_for_display (renderer, gtk_widget_get_display (window), NULL);
   texture = gsk_renderer_render_texture (renderer, node, &GRAPHENE_RECT_INIT (0, 0, width, height));
   gsk_renderer_unrealize (renderer);
-  gdk_texture_save_to_png (texture, path);
+  /* The software renderer gives up on some nodes (seen with the About
+   * dialog's SVG app icon on GTK 4.23); then try the window's renderer. */
+  if (texture == NULL)
+    texture = gsk_renderer_render_texture (gtk_native_get_renderer (GTK_NATIVE (window)),
+                                           node, &GRAPHENE_RECT_INIT (0, 0, width, height));
+  if (texture == NULL)
+    {
+      g_printerr ("app-shot: could not render the window (%dx%d, %s), trying again\n", width, height,
+                  node == NULL ? "nothing drawn yet" : "renderer failed");
+      return FALSE;
+    }
+  return gdk_texture_save_to_png (texture, path);
 }
 
 static gboolean
@@ -84,15 +97,24 @@ tick_cb (gpointer data)
       if (!ADW_IS_APPLICATION_WINDOW (window) || !gtk_widget_get_mapped (window))
         continue;
 
+      if (paintable == NULL)
+        paintable = gtk_widget_paintable_new (window);
+
       gtk_widget_activate_action (window, "window.open-library", NULL);
 
       if (ticks == delay - 2 && g_getenv ("APP_SHOT_EXPAND") != NULL)
         expand_apt_card (window, FALSE);
 
-      if (ticks >= delay)
+      /* APP_SHOT_ABOUT=1: open the About dialog for the screenshot (checks
+       * the Warsi rebrand's "Originally Bazaar" note). */
+      if (ticks == 10 && g_getenv ("APP_SHOT_ABOUT") != NULL)
+        g_action_group_activate_action (G_ACTION_GROUP (g_application_get_default ()), "about", NULL);
+
+      /* A snapshot taken while the window is between frames can come out
+       * empty (seen with the About dialog open); retry for 10 s. */
+      if (ticks >= delay && (save_png (window, g_getenv ("APP_SHOT")) || ticks >= delay + 10))
         {
-          save_png (window, g_getenv ("APP_SHOT"));
-          g_printerr ("app-shot: saved %s\n", g_getenv ("APP_SHOT"));
+          g_printerr ("app-shot: %s %s\n", ticks < delay + 10 ? "saved" : "gave up on", g_getenv ("APP_SHOT"));
           g_list_free (toplevels);
           _exit (0);
         }

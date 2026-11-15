@@ -61,6 +61,15 @@ grep -n "GETTEXT_PACKAGE" meson.build src/meson.build; grep -n 'prefix="/io/gith
 Expected: `GETTEXT_PACKAGE` is defined into `config.h`, the GResource prefix
 is unchanged, both icons are still bundled, and libadwaita is still ≥ 1.5.
 
+For the rebrand (PLAN.md §10), the check is the script itself: on the
+target, after H1–H12, `python3 ai-patches/patches/rebrand/rebrand.py`
+either finishes or names the upstream text that changed. To see in
+advance which of its files changed upstream:
+
+```bash
+git diff --stat 9560ad18cd60652aae10e81708ff4d36df775aa8 origin/main -- meson.build po/meson.build src/bz-window.blp src/bz-window.c src/shortcuts-dialog.blp src/bz-bundle-install-dialog.blp src/bz-preferences-dialog.c src/bz-inspector.c src/bazaar-autostart.desktop data/io.github.kolunmi.Bazaar.desktop.in data/io.github.kolunmi.Bazaar.metainfo.xml.in
+```
+
 ### 2.2 PackageKit D-Bus API (§3.1)
 
 On any machine with PackageKit:
@@ -289,6 +298,15 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 | `AdwClamp` (hook H4, `maximum-size`) | 1.0 |
 | `AdwStatusPage:child` (hook H4) | 1.0 |
 | `AdwViewStack`: `adw_view_stack_get_child_by_name`, `adw_view_stack_get_visible_child_name` (`app.open-library` checks the window shows its `installed` page) | 1.0 |
+
+**Rebrand (`bz-rebrand.c`):** `adw_about_dialog_get_application_name`,
+`adw_about_dialog_set_comments` (1.5), and **libadwaita's internal layout**
+of `AdwAboutDialog`: the application name is a `GtkLabel` whose parent is a
+`GtkBox` (icon, name, developer, version). `bz_rebrand_about_dialog ()` adds
+the "Originally Bazaar" label after the name label. Checked with
+libadwaita 1.9.2. If a release changes the layout, the note moves to the
+`comments` ("Details" row) instead; nothing breaks. Check: TEST.md T6's
+`app-about.png` shows the note under "Warsi".
 
 **Behaviour the code depends on:** `adw_expander_row_set_enable_expansion (TRUE)`
 also *expands* the row. `sync_ui ()` therefore calls
