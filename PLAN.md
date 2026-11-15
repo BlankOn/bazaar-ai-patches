@@ -263,10 +263,10 @@ there goes to the same relative path in the target. `patches/harness/` is
 
 ### 5.3 Apply the hooks
 
-Apply every hook in [DIFF.md](DIFF.md), in its order (H1 → H12). Each hook
+Apply every hook in [DIFF.md](DIFF.md), in its order (H1 → H13). Each hook
 has an *anchor* to find, the exact change, the *reason*, and what to do if
 the anchor no longer exists. Try `git apply --3way` with the unified diff in
-DIFF.md first (it covers H1–H11); fall back to manual edits per hook. Then
+DIFF.md first (it covers H1–H11 and H13); fall back to manual edits per hook. Then
 merge the translations (H12):
 
 ```bash
@@ -431,8 +431,19 @@ GLib), not `libpackagekit-glib2`.
   would conflict on every re-apply. The script only appends missing
   entries, so upstream translations always win and re-running is harmless.
 
+- **GL renderer by default (H13).** GTK 4.23's Vulkan renderer draws the
+  Search page broken (missing text, blank tiles), on real hardware and in
+  a VirtualBox VM. The user asked on 2026-11-15 for a permanent fix in the
+  patch and the package. Setting the variable in `main ()` covers every way
+  the app starts, unlike a wrapper in the desktop file (which D-Bus
+  activation and the daemon's own spawns bypass). An explicit
+  `GSK_RENDERER` still wins, so the workaround can be switched off per run.
+
 ## 9. Known limitations
 
+- H13 forces GL even where GTK's Vulkan renderer would work (it costs
+  nothing visible in an app store). Drop it once the distribution's GTK is
+  fixed (DIFF.md H13, "When to drop it").
 - The first notification comes up to an hour after login (the daemon's
   timer), then at most once a day.
 - A notification click opens whatever owns `io.github.kolunmi.Bazaar` on

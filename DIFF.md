@@ -5,7 +5,7 @@ exist upstream**: what changes, why it is needed, and how it connects to the
 entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 
 - Base commit: `9560ad18cd60652aae10e81708ff4d36df775aa8` (see [API.md §1](API.md#1-base-the-codebase-the-patch-was-written-against)).
-- Upstream files touched: **11** by hooks H1–H11 (about 90 added lines, 1
+- Upstream files touched: **12** by hooks H1–H11 and H13 (about 100 added lines, 1
   changed line, nothing deleted), plus `po/id.po`, which hook H12 extends
   with a script (about 200 appended lines; one obsolete entry removed).
 - Every hook except the JSON manifest carries the marker
@@ -42,6 +42,7 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
                                    as $sysconfdir/xdg/autostart/bazaar.desktop
  po/id.po ───────────────(H12)──► patches/po/id-apt-updates.po, merged by
                                    patches/po/merge-translations.py
+ src/main.c ─────────────(H13)──► GSK_RENDERER=gl unless set (GTK renderer workaround)
 ```
 
 | Hook | Upstream file | New file / symbol it connects to |
@@ -58,8 +59,9 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 | H10 | `data/io.github.kolunmi.Bazaar.gschema.xml` | keys read/written by `bz-update-notifier.c`, H8 and H11 |
 | H11 | `data/meson.build` | `patches/data/bazaar-update-notifications.desktop` |
 | H12 | `po/id.po` | `patches/po/id-apt-updates.po` (script, no diff) |
+| H13 | `src/main.c` | none: makes GTK use its GL renderer (works around a GTK 4.23 Vulkan bug) |
 
-Apply order: H1 → H12, then R. H1–H4 are required for the card; H7–H11 for the
+Apply order: H1 → H13, then R. H1–H4 are required for the card; H7–H11 for the
 notifications (H7, H9, H10 together; H8 and H11 make them arrive without
 upstream's auto-update); H5 and H12 for translations; H6 only matters for
 Flatpak builds.
@@ -455,6 +457,42 @@ file `patches/po/<lang>-apt-updates.po`; the script picks it up.
 
 ---
 
+## H13: `src/main.c`: use GTK's GL renderer
+
+**Why:** with GTK **4.23.4** (BlankOn sinambung's GTK, as of 2026-11-15),
+GTK's default **Vulkan** renderer draws the Search page without text and
+with blank category tiles. Upstream Bazaar has the same problem; it is a GTK
+bug, not Bazaar's or this patch's. Diagnosed on 2026-11-14 (AMD Radeon
+Cezanne, Wayland): the same render tree draws correctly with the GL and
+Cairo renderers. It was seen again on 2026-11-15 in a VirtualBox VM running
+the `warsi` package. The user confirmed `GSK_RENDERER=gl` fixes it.
+
+**Anchor:** in `main ()`, the GUI branch (not the refresh/update worker
+branches), right before `/* Init Bazaar GTK Extensions (see ../bge/) */`
+and `bge_init ();`, which is before GTK initializes.
+
+**Change:**
+
+```c
+      /* DOWNSTREAM PATCH (APT system updates): GTK renderer workaround, see
+       * ai-patches/DIFF.md hook H13. GTK 4.23's default Vulkan renderer draws
+       * the Search page without text and with blank tiles; the GL renderer
+       * draws it correctly. Must run before GTK initializes. Setting
+       * GSK_RENDERER yourself (e.g. GSK_RENDERER=vulkan) still wins. */
+      if (g_getenv ("GSK_RENDERER") == NULL)
+        g_setenv ("GSK_RENDERER", "gl", FALSE);
+```
+
+**Connection:** none to the new files. GTK reads `GSK_RENDERER` when it
+creates a window's renderer; every way Bazaar starts (the menu, the daemon,
+D-Bus activation, a notification click) runs `main ()` first.
+
+**If the anchor moved:** put it anywhere in the GUI path before
+`g_application_run ()`. **When to drop it:** once the distribution's GTK
+draws the Search page correctly with `GSK_RENDERER=vulkan` (TEST.md T10).
+
+---
+
 ## R: rebrand to Warsi (script, no diff)
 
 **Why:** the user decided on 2026-11-15 to ship the patched Bazaar as Warsi
@@ -499,7 +537,7 @@ APT hooks use (H8's `gsettings get`, H10's schema, H11's autostart file).
 
 ## Full unified diff (for `git apply`)
 
-This is the exact `git diff` of the eleven files of hooks H1–H11 against
+This is the exact `git diff` of the twelve files of hooks H1–H11 and H13 against
 the base commit (H12 is the script above). It is
 the only `diff`-fenced block in this file, so it can be extracted and applied
 mechanically:
@@ -765,4 +803,22 @@ index b8c798c1..0788843c 100644
    if (!auto_update)
      {
        g_debug ("Skipping update check: auto-update is disabled\n");
+diff --git a/src/main.c b/src/main.c
+--- a/src/main.c
++++ b/src/main.c
+@@ -56,6 +56,14 @@
+     {
+       g_autoptr (BzApplication) app = NULL;
+ 
++      /* DOWNSTREAM PATCH (APT system updates): GTK renderer workaround, see
++       * ai-patches/DIFF.md hook H13. GTK 4.23's default Vulkan renderer draws
++       * the Search page without text and with blank tiles; the GL renderer
++       * draws it correctly. Must run before GTK initializes. Setting
++       * GSK_RENDERER yourself (e.g. GSK_RENDERER=vulkan) still wins. */
++      if (g_getenv ("GSK_RENDERER") == NULL)
++        g_setenv ("GSK_RENDERER", "gl", FALSE);
++
+       /* Init Bazaar GTK Extensions (see ../bge/) */
+       bge_init ();
+ 
 ```

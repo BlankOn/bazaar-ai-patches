@@ -397,9 +397,12 @@ BAZAAR::APT-DEBUG: GetUpdates: U upgrades (S security), K new, R removals
 Press Ctrl+D for the Library page. Browsing, Flatpak installs and Flatpak
 updates must work exactly as upstream. Close the window to quit.
 
-If the Search page (or any page) shows missing text and blank tiles, it is a
-GTK renderer bug, not this patch: prefix the command with `GSK_RENDERER=gl`
-(see [Troubleshooting](#troubleshooting)).
+The patched app uses GTK's GL renderer (hook H13), so the Search page must
+show its text and category tiles. To check whether the distribution's GTK
+still needs H13, run once with `GSK_RENDERER=vulkan` in front of the command:
+missing text and blank tiles on Search mean it does. `GSK_DEBUG=renderer`
+prints which renderer GTK chose (`Using renderer 'GskGLRenderer'` by
+default).
 
 ## 5. Record the result
 
@@ -420,7 +423,7 @@ Lessons from earlier runs:
 | GTK Broadway backend crashes | `broadway-output.c: assertion failed: (!reused_node->consumed)` on Bazaar's Explore page | do not use Broadway |
 | "A Bazaar instance is already running" | the Flatpak Bazaar owns the app ID | `flatpak kill io.github.kolunmi.Bazaar` |
 | build fails at `countries.gvariant` | upstream needs `python3-babel` | install it |
-| Search page shows missing text, blank category tiles (upstream commit too) | bug in GTK **4.23.4**'s default **Vulkan** renderer (seen 2026-11-14 on AMD Radeon Cezanne, Wayland); the same render tree draws correctly with the GL and Cairo renderers, so it is not Bazaar or this patch | run Bazaar with `GSK_RENDERER=gl`; GTK 4.24.1 likely fixes it (untested). Check the renderer with `GSK_DEBUG=renderer` |
+| Search page shows missing text, blank category tiles (upstream commit too) | bug in GTK **4.23.4**'s default **Vulkan** renderer (seen 2026-11-14 on AMD Radeon Cezanne, Wayland); the same render tree draws correctly with the GL and Cairo renderers, so it is not Bazaar or this patch | fixed by hook H13 (the app sets `GSK_RENDERER=gl` unless it is set). Still broken: check the renderer with `GSK_DEBUG=renderer`; an exported `GSK_RENDERER=vulkan` overrides H13 |
 | T7 prints nothing at all | `G_MESSAGES_DEBUG` with commas (`BAZAAR::NOTIFY,BAZAAR::APT`) matches no domain | separate domains with spaces, or use `G_MESSAGES_DEBUG=all` |
 | Notification shows, click opens Flathub's Bazaar | both builds installed; the D-Bus name `io.github.kolunmi.Bazaar` activates the Flatpak one | test the action with `gapplication action` against the running dev build (T9), or remove the Flatpak while testing |
 | `msgfmt: duplicate message definition` after merging | an obsolete `#~` entry with the same msgid was left in `po/<lang>.po` | the merge script removes it; do not append fragment entries by hand |

@@ -50,7 +50,7 @@ t1_static () {
     fi
   done
   for f in src/meson.build src/bazaar.gresource.xml src/bz-library-page.c src/bz-library-page.blp po/POTFILES.in \
-           src/update-worker.c src/bazaar-daemon.c src/bz-application.c \
+           src/update-worker.c src/bazaar-daemon.c src/bz-application.c src/main.c \
            data/meson.build "data/$APP_ID.gschema.xml" data/bazaar-update-notifications.desktop \
            src/bz-apt-updates.h src/bz-apt-updates.c src/bz-apt-updates-card.h src/bz-apt-updates-card.c src/bz-apt-updates-card.blp \
            src/bz-update-notifier.h src/bz-update-notifier.c; do

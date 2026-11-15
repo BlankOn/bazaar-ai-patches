@@ -271,6 +271,11 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 
 ### 3.4 GTK 4
 
+**Environment variable `GSK_RENDERER`** (hook H13): GTK reads it when it
+creates a renderer; `gl` selects `GskGLRenderer`. Documented in GTK's
+"Running GTK applications". H13 sets it before GTK initializes, only when
+unset.
+
 | API | Notes |
 |---|---|
 | `gtk_widget_class_set_template_from_resource`, `gtk_widget_class_bind_template_child`, `gtk_widget_class_bind_template_callback`, `gtk_widget_init_template` | composite template |
