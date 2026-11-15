@@ -271,10 +271,15 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 
 ### 3.4 GTK 4
 
-**Environment variable `GSK_RENDERER`** (hook H13): GTK reads it when it
-creates a renderer; `gl` selects `GskGLRenderer`. Documented in GTK's
-"Running GTK applications". H13 sets it before GTK initializes, only when
-unset.
+**Renderer choice** (hook H13):
+
+| API | Use |
+|---|---|
+| environment variable `GSK_RENDERER` (`gl`, `cairo`) | read by GTK once, when it creates the first renderer; H13 sets it only when unset. Documented in GTK's "Running GTK applications" |
+| `gtk_init_check` | before `g_application_run`; GtkApplication's own call later is a no-op |
+| `gdk_display_create_gl_context`, `gdk_gl_context_realize`, `gdk_gl_context_make_current`, `gdk_gl_context_clear_current` | a GL context to ask the driver's name |
+| libepoxy `epoxy_glGetString` (a function pointer variable, found with `dlsym (RTLD_DEFAULT, …)`), `GL_RENDERER` = `0x1F01` | not a GTK API: works because GTK links libepoxy. If it is missing, H13 assumes hardware GL |
+| Mesa renderer names `llvmpipe`, `softpipe`, `swrast` | software GL; checked lower-case, as substrings |
 
 | API | Notes |
 |---|---|

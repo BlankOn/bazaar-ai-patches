@@ -408,12 +408,34 @@ BAZAAR::APT-DEBUG: GetUpdates: U upgrades (S security), K new, R removals
 Press Ctrl+D for the Library page. Browsing, Flatpak installs and Flatpak
 updates must work exactly as upstream. Close the window to quit.
 
-The patched app uses GTK's GL renderer (hook H13), so the Search page must
-show its text and category tiles. To check whether the distribution's GTK
+The patched app chooses GTK's renderer (hook H13): GL on a real graphics
+card, Cairo where GL runs in software only (a VM without 3D acceleration).
+The Search page must show its text and category tiles, and open without
+freezing. To check whether the distribution's GTK
 still needs H13, run once with `GSK_RENDERER=vulkan` in front of the command:
 missing text and blank tiles on Search mean it does. `GSK_DEBUG=renderer`
 prints which renderer GTK chose (`Using renderer 'GskGLRenderer'` by
 default).
+
+### Search page freeze (hook H13)
+
+Measures how long the window freezes when the Search page opens, and with
+`--vm` emulates a virtual machine without 3D acceleration (software GL,
+Mesa's shader cache off, 2 CPU cores), where the freeze was seen:
+
+```bash
+ai-patches/patches/harness/stall-probe.sh --vm
+```
+
+It starts the app with an `LD_PRELOAD` probe (`stall-probe.c`), switches to
+Search after 30 s, types "a", and prints the renderer, memory and
+`longest main-loop stall after opening Search`. Exit 0 when that is at most
+1 s. Expected (2026-11-15): `Using GTK's cairo renderer`, about 0.13 s.
+For comparison, `GSK_RENDERER=gl ai-patches/patches/harness/stall-probe.sh --vm`
+shows the freeze H13 avoids (about 5 s, exit 1). While the main loop is
+blocked, the probe prints the main thread's stack to
+`build/apt-harness/stall-probe.log` (resolve offsets with `addr2line`); that
+is how the shader compiler was found.
 
 ## 5. Record the result
 
@@ -434,7 +456,8 @@ Lessons from earlier runs:
 | GTK Broadway backend crashes | `broadway-output.c: assertion failed: (!reused_node->consumed)` on Bazaar's Explore page | do not use Broadway |
 | "A Bazaar instance is already running" | the Flatpak Bazaar owns the app ID | `flatpak kill io.github.kolunmi.Bazaar` |
 | build fails at `countries.gvariant` | upstream needs `python3-babel` | install it |
-| Search page shows missing text, blank category tiles (upstream commit too) | bug in GTK **4.23.4**'s default **Vulkan** renderer (seen 2026-11-14 on AMD Radeon Cezanne, Wayland); the same render tree draws correctly with the GL and Cairo renderers, so it is not Bazaar or this patch | fixed by hook H13 (the app sets `GSK_RENDERER=gl` unless it is set). Still broken: check the renderer with `GSK_DEBUG=renderer`; an exported `GSK_RENDERER=vulkan` overrides H13 |
+| Search page shows missing text, blank category tiles (upstream commit too) | bug in GTK **4.23.4**'s default **Vulkan** renderer (seen 2026-11-14 on AMD Radeon Cezanne, Wayland); the same render tree draws correctly with the GL and Cairo renderers, so it is not Bazaar or this patch | fixed by hook H13 (the app sets `GSK_RENDERER=gl`, or `cairo` on software GL, unless it is set). Still broken: check the renderer with `GSK_DEBUG=renderer`; an exported `GSK_RENDERER=vulkan` overrides H13 |
+| Search tab heavy, takes 10–20 s, "not responding", sometimes crashes (VirtualBox VM) | GL only in software (llvmpipe): GTK's GPU renderers compile shaders on the main thread the first time each is needed (stacks in Mesa/LLVM under `gsk_renderer_render`) | fixed by hook H13 (Cairo renderer on software GL). Check: `G_MESSAGES_DEBUG=BAZAAR::MAIN` prints `GL renderer: llvmpipe …` and `Using GTK's cairo renderer`; measure with `stall-probe.sh --vm` |
 | T7 prints nothing at all | `G_MESSAGES_DEBUG` with commas (`BAZAAR::NOTIFY,BAZAAR::APT`) matches no domain | separate domains with spaces, or use `G_MESSAGES_DEBUG=all` |
 | Notification shows, click opens Flathub's Bazaar | both builds installed; the D-Bus name `io.github.kolunmi.Bazaar` activates the Flatpak one | test the action with `gapplication action` against the running dev build (T9), or remove the Flatpak while testing |
 | `msgfmt: duplicate message definition` after merging | an obsolete `#~` entry with the same msgid was left in `po/<lang>.po` | the merge script removes it; do not append fragment entries by hand |

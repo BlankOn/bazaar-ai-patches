@@ -5,7 +5,7 @@ exist upstream**: what changes, why it is needed, and how it connects to the
 entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 
 - Base commit: `9560ad18cd60652aae10e81708ff4d36df775aa8` (see [API.md §1](API.md#1-base-the-codebase-the-patch-was-written-against)).
-- Upstream files touched: **12** by hooks H1–H11 and H13 (about 100 added lines, 1
+- Upstream files touched: **12** by hooks H1–H11 and H13 (about 170 added lines, 1
   changed line, nothing deleted), plus `po/id.po`, which hook H12 extends
   with a script (about 200 appended lines; one obsolete entry removed).
 - Every hook except the JSON manifest carries the marker
@@ -42,7 +42,7 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
                                    as $sysconfdir/xdg/autostart/bazaar.desktop
  po/id.po ───────────────(H12)──► patches/po/id-apt-updates.po, merged by
                                    patches/po/merge-translations.py
- src/main.c ─────────────(H13)──► GSK_RENDERER=gl unless set (GTK renderer workaround)
+ src/main.c ─────────────(H13)──► GSK_RENDERER=gl, or cairo on software GL, unless set
 ```
 
 | Hook | Upstream file | New file / symbol it connects to |
@@ -59,7 +59,7 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 | H10 | `data/io.github.kolunmi.Bazaar.gschema.xml` | keys read/written by `bz-update-notifier.c`, H8 and H11 |
 | H11 | `data/meson.build` | `patches/data/bazaar-update-notifications.desktop` |
 | H12 | `po/id.po` | `patches/po/id-apt-updates.po` (script, no diff) |
-| H13 | `src/main.c` | none: makes GTK use its GL renderer (works around a GTK 4.23 Vulkan bug) |
+| H13 | `src/main.c` | none: chooses GTK's renderer (GL; Cairo where GL is software-only) |
 
 Apply order: H1 → H13, then R. H1–H4 are required for the card; H7–H11 for the
 notifications (H7, H9, H10 together; H8 and H11 make them arrive without
@@ -457,39 +457,58 @@ file `patches/po/<lang>-apt-updates.po`; the script picks it up.
 
 ---
 
-## H13: `src/main.c`: use GTK's GL renderer
+## H13: `src/main.c`: choose GTK's renderer
 
-**Why:** with GTK **4.23.4** (BlankOn sinambung's GTK, as of 2026-11-15),
-GTK's default **Vulkan** renderer draws the Search page without text and
-with blank category tiles. Upstream Bazaar has the same problem; it is a GTK
-bug, not Bazaar's or this patch's. Diagnosed on 2026-11-14 (AMD Radeon
-Cezanne, Wayland): the same render tree draws correctly with the GL and
-Cairo renderers. It was seen again on 2026-11-15 in a VirtualBox VM running
-the `warsi` package. The user confirmed `GSK_RENDERER=gl` fixes it.
+**Why:** two problems with GTK's default renderer, both upstream's too:
 
-**Anchor:** in `main ()`, the GUI branch (not the refresh/update worker
-branches), right before `/* Init Bazaar GTK Extensions (see ../bge/) */`
-and `bge_init ();`, which is before GTK initializes.
+1. With GTK **4.23.4** (BlankOn sinambung's GTK, as of 2026-11-15), the
+   default **Vulkan** renderer draws the Search page without text and with
+   blank category tiles. The GL and Cairo renderers draw it correctly.
+   Diagnosed on 2026-11-14 (AMD Radeon Cezanne, Wayland), and seen again on
+   2026-11-15 in a VirtualBox VM. The user confirmed `GSK_RENDERER=gl`
+   fixes it.
+2. Where GL only runs in **software** (Mesa's llvmpipe: virtual machines
+   without 3D acceleration, such as the user's VirtualBox VM), GTK's GPU
+   renderers compile their shaders on the CPU, **on the main thread**, the
+   first time each one is needed. Opening the Search page draws many new
+   things (icons, shadows, tiles), so the window freezes: for 10–20 s on
+   the user's VM (heavy, sometimes "not responding", sometimes a crash),
+   and for 4.5–5.6 s when a fast machine emulates it (2 cores,
+   `LIBGL_ALWAYS_SOFTWARE=1`, no Mesa shader cache). With a warm Mesa
+   shader cache it is shorter, hence "sometimes". Stacks sampled during
+   the freeze (TEST.md, "Search page freeze") are in Mesa/LLVM's shader
+   compiler under `gsk_renderer_render`, not in the app's code. GTK's
+   **Cairo** renderer compiles nothing: 0.12–0.16 s at most, and about
+   120 MB less memory.
 
-**Change:**
+**Anchor:** includes after `#include <libdex.h>`; two static functions
+before `main ()`; the call in `main ()`'s GUI branch (not the refresh/update
+worker branches), right before `/* Init Bazaar GTK Extensions (see ../bge/) */`
+and `bge_init ();`, before any window exists.
 
-```c
-      /* DOWNSTREAM PATCH (APT system updates): GTK renderer workaround, see
-       * ai-patches/DIFF.md hook H13. GTK 4.23's default Vulkan renderer draws
-       * the Search page without text and with blank tiles; the GL renderer
-       * draws it correctly. Must run before GTK initializes. Setting
-       * GSK_RENDERER yourself (e.g. GSK_RENDERER=vulkan) still wins. */
-      if (g_getenv ("GSK_RENDERER") == NULL)
-        g_setenv ("GSK_RENDERER", "gl", FALSE);
-```
+**Change:** `select_gsk_renderer ()` (full code in the unified diff below):
 
-**Connection:** none to the new files. GTK reads `GSK_RENDERER` when it
-creates a window's renderer; every way Bazaar starts (the menu, the daemon,
-D-Bus activation, a notification click) runs `main ()` first.
+- `GSK_RENDERER` set by the user: kept, nothing else happens.
+- Otherwise `gtk_init_check ()` (GtkApplication calls it again later, which
+  is harmless), create and realize a `GdkGLContext`, and read
+  `GL_RENDERER` through libepoxy's `epoxy_glGetString`, found with `dlsym`
+  (GTK loads libepoxy; no new build dependency).
+- The name contains `llvmpipe`, `softpipe`, `swrast` or
+  `software rasterizer`, or GL is unavailable: `GSK_RENDERER=cairo`.
+- Otherwise: `GSK_RENDERER=gl` (problem 1).
 
-**If the anchor moved:** put it anywhere in the GUI path before
-`g_application_run ()`. **When to drop it:** once the distribution's GTK
-draws the Search page correctly with `GSK_RENDERER=vulkan` (TEST.md T10).
+It takes about 130–160 ms at startup, most of it `gtk_init`, which runs
+anyway. `G_MESSAGES_DEBUG=BAZAAR::MAIN` logs the GL renderer and the choice.
+
+**Connection:** none to the new files. GTK reads `GSK_RENDERER` once, when
+it creates the first renderer; every way the app starts (the menu, the
+daemon, D-Bus activation, a notification click) runs `main ()` first.
+
+**If the anchor moved:** put the call anywhere in the GUI path before
+`g_application_run ()`. **When to drop it:** problem 1 once the
+distribution's GTK draws the Search page with `GSK_RENDERER=vulkan`;
+problem 2 once GTK itself avoids its GPU renderers on software GL
+(check with `patches/harness/stall-probe.sh --vm`).
 
 ---
 
@@ -806,17 +825,96 @@ index b8c798c1..0788843c 100644
 diff --git a/src/main.c b/src/main.c
 --- a/src/main.c
 +++ b/src/main.c
-@@ -56,6 +56,14 @@
+@@ -26,10 +26,82 @@
+ #include <glib/gi18n.h>
+ #include <libdex.h>
+ 
++/* DOWNSTREAM PATCH (APT system updates): renderer choice, hook H13 */
++#include <dlfcn.h>
++#include <string.h>
++
++
+ #include "bz-application.h"
+ #include "refresh-worker.h"
+ #include "update-worker.h"
+ 
++/* DOWNSTREAM PATCH (APT system updates): GTK renderer choice, see
++ * ai-patches/DIFF.md hook H13.
++ *
++ * TRUE when GL only runs in software (Mesa's llvmpipe, softpipe, swrast:
++ * virtual machines without 3D acceleration, broken drivers) or not at all.
++ * GTK's GPU renderers then compile their shaders on the CPU, on the main
++ * thread, the first time each one is needed; the Search page alone froze
++ * the window for seconds ("not responding"). GTK does not tell which GL
++ * driver it got, so ask GL itself, through libepoxy, which GTK loads. */
++static gboolean
++gl_is_software_only (void)
++{
++  typedef const unsigned char *(*GetStringFunc) (unsigned int name);
++  static const char *const software[] = { "llvmpipe", "softpipe", "swrast", "software rasterizer", NULL };
++  g_autoptr (GdkGLContext) context = NULL;
++  g_autoptr (GError) local_error   = NULL;
++  g_autofree char *renderer        = NULL;
++  GetStringFunc   *get_string      = NULL;
++  const char      *string          = NULL;
++  GdkDisplay      *display         = NULL;
++
++  display = gdk_display_get_default ();
++  if (display == NULL)
++    return FALSE;
++
++  context = gdk_display_create_gl_context (display, &local_error);
++  if (context == NULL || !gdk_gl_context_realize (context, &local_error))
++    {
++      g_debug ("No usable GL: %s", local_error != NULL ? local_error->message : "unknown error");
++      return TRUE;
++    }
++
++  get_string = dlsym (RTLD_DEFAULT, "epoxy_glGetString");
++  if (get_string == NULL || *get_string == NULL)
++    return FALSE;
++
++  gdk_gl_context_make_current (context);
++  string   = (const char *) (*get_string) (0x1F01 /* GL_RENDERER */);
++  renderer = g_ascii_strdown (string != NULL ? string : "", -1);
++  gdk_gl_context_clear_current ();
++
++  g_debug ("GL renderer: %s", renderer);
++  for (guint i = 0; software[i] != NULL; i++)
++    if (strstr (renderer, software[i]) != NULL)
++      return TRUE;
++  return FALSE;
++}
++
++/* Sets GSK_RENDERER, unless the user did, before GTK creates a renderer:
++ * - "cairo" when GL runs in software only (see above);
++ * - "gl" otherwise: GTK 4.23's default Vulkan renderer draws the Search page
++ *   without text and with blank tiles, its GL renderer draws it correctly. */
++static void
++select_gsk_renderer (void)
++{
++  const char *renderer = NULL;
++
++  if (g_getenv ("GSK_RENDERER") != NULL)
++    return;
++  if (!gtk_init_check ())
++    return;
++
++  renderer = gl_is_software_only () ? "cairo" : "gl";
++  g_debug ("Using GTK's %s renderer", renderer);
++  g_setenv ("GSK_RENDERER", renderer, FALSE);
++}
++
+ int
+ main (int   argc,
+       char *argv[])
+@@ -56,6 +128,10 @@
      {
        g_autoptr (BzApplication) app = NULL;
  
-+      /* DOWNSTREAM PATCH (APT system updates): GTK renderer workaround, see
-+       * ai-patches/DIFF.md hook H13. GTK 4.23's default Vulkan renderer draws
-+       * the Search page without text and with blank tiles; the GL renderer
-+       * draws it correctly. Must run before GTK initializes. Setting
-+       * GSK_RENDERER yourself (e.g. GSK_RENDERER=vulkan) still wins. */
-+      if (g_getenv ("GSK_RENDERER") == NULL)
-+        g_setenv ("GSK_RENDERER", "gl", FALSE);
++      /* DOWNSTREAM PATCH (APT system updates): GTK renderer choice, see
++       * ai-patches/DIFF.md hook H13. Before the first window. */
++      select_gsk_renderer ();
 +
        /* Init Bazaar GTK Extensions (see ../bge/) */
        bge_init ();

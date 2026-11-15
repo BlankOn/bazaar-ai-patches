@@ -350,6 +350,8 @@ Test tooling lives in `patches/harness/` and is never copied into `src/`:
 | `build.sh`, `harness.c` | standalone window with only the card (`HARNESS_LOCALEDIR` for translations) |
 | `check-counts.py` | T4 count comparison |
 | `app-shot.sh`, `app-shot.c` | `LD_PRELOAD` shim that screenshots the real app |
+| `stall-probe.sh`, `stall-probe.c` | measures how long opening the Search page freezes the real app (`--vm`: emulated VM without 3D acceleration); prints the main thread's stack while it is blocked (hook H13) |
+| `app-search.py` | GLib's desktop-file search, as Praya and GNOME Shell use it (R1) |
 | `brand.sh` | sourced by the scripts: reads the app ID, program name and text domain from `meson.build`, so every test works on Bazaar and on Warsi |
 | `run-tests.sh` | runs T1–T6 (T7 with `--notify`, R1 on a rebranded tree) and prints a summary |
 | `expected-library-page.png` | reference screenshot of the real Library page |
@@ -431,19 +433,28 @@ GLib), not `libpackagekit-glib2`.
   would conflict on every re-apply. The script only appends missing
   entries, so upstream translations always win and re-running is harmless.
 
-- **GL renderer by default (H13).** GTK 4.23's Vulkan renderer draws the
-  Search page broken (missing text, blank tiles), on real hardware and in
-  a VirtualBox VM. The user asked on 2026-11-15 for a permanent fix in the
-  patch and the package. Setting the variable in `main ()` covers every way
-  the app starts, unlike a wrapper in the desktop file (which D-Bus
-  activation and the daemon's own spawns bypass). An explicit
-  `GSK_RENDERER` still wins, so the workaround can be switched off per run.
+- **GTK renderer chosen by the app (H13).** GTK 4.23's Vulkan renderer
+  draws the Search page broken (missing text, blank tiles), on real
+  hardware and in a VirtualBox VM, so the app uses GL. Where GL is
+  software-only (llvmpipe, e.g. a VM without 3D acceleration), every GPU
+  renderer compiles shaders on the main thread, and opening Search froze
+  the user's VM for 10–20 s ("not responding", crashes). There the app
+  uses the Cairo renderer: 0.12 s instead of 4.5–5.6 s in the emulation,
+  and less memory. The user asked for permanent fixes on 2026-11-15.
+  Deciding in `main ()` covers every way the app starts, unlike a wrapper
+  in the desktop file, which D-Bus activation and the daemon's own spawns
+  bypass. An explicit `GSK_RENDERER` still wins.
 
 ## 9. Known limitations
 
-- H13 forces GL even where GTK's Vulkan renderer would work (it costs
-  nothing visible in an app store). Drop it once the distribution's GTK is
-  fixed (DIFF.md H13, "When to drop it").
+- H13 forces GL even where GTK's Vulkan renderer would work, and Cairo on
+  software GL even where a warm Mesa shader cache would make GL fast
+  enough; neither costs anything visible in an app store. Drop it once
+  GTK is fixed (DIFF.md H13, "When to drop it").
+- H13 reads the GL driver name through libepoxy's `epoxy_glGetString`
+  (found with `dlsym`). If a GTK release stops loading libepoxy, the check
+  finds nothing and the app uses GL, as before H13 learned about software
+  GL.
 - The first notification comes up to an hour after login (the daemon's
   timer), then at most once a day.
 - A notification click opens whatever owns `io.github.kolunmi.Bazaar` on
