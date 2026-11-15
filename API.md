@@ -40,14 +40,16 @@ applying. Each check names the section below that explains it.
 ### 2.1 What changed upstream since the base commit (Bazaar-internal APIs, §3.6)
 
 ```bash
-git fetch origin && git log --oneline 9560ad18cd60652aae10e81708ff4d36df775aa8..origin/main -- src/bz-library-page.c src/bz-library-page.blp src/meson.build src/bazaar.gresource.xml po/POTFILES.in build-aux/flatpak/io.github.kolunmi.Bazaar.json
+git fetch origin && git log --oneline 9560ad18cd60652aae10e81708ff4d36df775aa8..origin/main -- src/bz-library-page.c src/bz-library-page.blp src/meson.build src/bazaar.gresource.xml po/POTFILES.in build-aux/flatpak/io.github.kolunmi.Bazaar.json src/update-worker.c src/bazaar-daemon.c src/bz-application.c src/bz-preferences-dialog.c src/bz-flatpak-private.h src/bz-window.c data/io.github.kolunmi.Bazaar.gschema.xml data/meson.build
 ```
 
 ```bash
-git diff 9560ad18cd60652aae10e81708ff4d36df775aa8 origin/main -- src/bz-library-page.c src/bz-library-page.blp src/meson.build src/bazaar.gresource.xml po/POTFILES.in build-aux/flatpak/io.github.kolunmi.Bazaar.json
+git diff 9560ad18cd60652aae10e81708ff4d36df775aa8 origin/main -- src/bz-library-page.c src/bz-library-page.blp src/meson.build src/bazaar.gresource.xml po/POTFILES.in build-aux/flatpak/io.github.kolunmi.Bazaar.json src/update-worker.c src/bazaar-daemon.c src/bz-application.c src/bz-preferences-dialog.c src/bz-flatpak-private.h src/bz-window.c data/io.github.kolunmi.Bazaar.gschema.xml data/meson.build
 ```
 
-Empty output means every hook in DIFF.md applies unchanged. Otherwise read
+Empty output means every hook in DIFF.md applies unchanged
+(`bz-preferences-dialog.c`, `bz-flatpak-private.h` and `bz-window.c` are not
+hooked but are relied on, §3.6). Otherwise read
 the diff with DIFF.md open and confirm each hook's anchor still exists.
 
 Also check the conventions the new files rely on:
@@ -205,6 +207,32 @@ update at boot. Check with `systemctl cat packagekit-offline-update.service`.
 | session | `org.gnome.SessionManager` `/org/gnome/SessionManager` `org.gnome.SessionManager` | `Reboot ()` | tried first; GNOME shows its own confirmation dialog |
 | system | `org.freedesktop.login1` `/org/freedesktop/login1` `org.freedesktop.login1.Manager` | `Reboot (b interactive=true)` | fallback; called with `G_DBUS_CALL_FLAGS_ALLOW_INTERACTIVE_AUTHORIZATION` |
 
+### 3.2a Notification APIs (`bz-update-notifier.c`)
+
+| Bus | Name / object / interface | Method | Notes |
+|---|---|---|---|
+| session | `org.gtk.Notifications` `/org/gtk/Notifications` `org.gtk.Notifications` | `AddNotification (s app_id, s id, a{sv} notification)` | tried first, `G_DBUS_CALL_FLAGS_NO_AUTO_START`; GNOME Shell implements it (what `GApplication` uses natively). `app_id` = `APPLICATION_ID` |
+| session | `org.freedesktop.portal.Desktop` `/org/freedesktop/portal/desktop` `org.freedesktop.portal.Notification` | `AddNotification (s id, a{sv} notification)` | fallback (Flatpak sandbox, other desktops); upstream's `update-worker.c` uses the same call |
+
+Notification dictionary keys used (same meaning in both interfaces):
+`title` (s), `body` (s), `priority` (s: `normal`/`high`), `default-action`
+(s: `app.open-library`), `buttons` (aa{sv} with `label`, `action`).
+
+The click is delivered by the notification server as
+`org.freedesktop.Application.ActivateAction ("open-library", [], {})` on the
+bus name `io.github.kolunmi.Bazaar`, which `GApplication` implements;
+the name is D-Bus-activatable through upstream's
+`data/dbus/io.github.kolunmi.Bazaar.service`.
+
+**libflatpak** (only here; upstream already links it):
+`flatpak_installation_new_system`, `flatpak_installation_list_installed_refs_for_update`,
+`flatpak_ref_get_name`, `FLATPAK_REF`.
+
+**GNOME autostart keys** in `patches/data/bazaar-update-notifications.desktop`:
+`X-GNOME-Autostart-enabled`, `X-GNOME-Autostart-Condition=GSettings <schema> <key>`
+(gnome-session; other sessions ignore the condition and start the daemon,
+which then exits after 5 s idle if the key is false).
+
 ### 3.3 GLib / GIO (no explicit minimum in upstream; GTK ≥ 4.22 implies a recent GLib)
 
 Used in `bz-apt-updates.c` / `bz-apt-updates-card.c`; the newest
@@ -226,6 +254,11 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 | `g_queue_*`, `g_ptr_array_*`, `g_atomic_int_inc/dec_and_test`, `g_get_language_names`, `g_strsplit`, `g_strdup_printf`, `g_timeout_add` | old | |
 | `GSimpleActionGroup`, `g_action_map_add_action_entries`, `g_simple_action_set_enabled` | 2.32 | card actions |
 | `ngettext`, `_()` via `<glib/gi18n.h>` + `GETTEXT_PACKAGE` | n/a | translations |
+| `g_main_context_iteration`, `g_timeout_add_seconds`, `g_source_remove` | old | notifier waits for `BzAptUpdates:loaded` without a main loop |
+| `g_settings_get_boolean`, `g_settings_get/set_int64`, `g_settings_sync` | 2.26 | notifier keys (H10) |
+| `g_network_monitor_get_default`, `g_network_monitor_get_network_metered` | 2.32 / 2.46 | skip the Flatpak count on metered networks |
+| `g_dbus_connection_call_sync`, `G_DBUS_CALL_FLAGS_NO_AUTO_START` | 2.26 | notifications |
+| `g_application_activate`, `g_application_hold/release`, `g_application_get_default` | 2.28–2.32 | `app.open-library` |
 
 ### 3.4 GTK 4
 
@@ -237,6 +270,7 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 | `gtk_image_new_from_icon_name` | security icon `security-low-symbolic` (Adwaita icon theme); removal icon `user-trash-symbolic` (bundled by upstream in `src/icons`) |
 | `GtkProgressBar`: `gtk_progress_bar_set_fraction`, `gtk_progress_bar_pulse` | progress row |
 | `GtkListBox` with style `boxed-list`, `GtkLabel` with styles `heading`, `h4` | same styling as upstream "Pending Updates" |
+| `gtk_application_get_active_window`, `gtk_application_get_windows`, `gtk_window_present`, `gtk_widget_activate_action`, `gtk_stack_get_child_by_name`, `gtk_stack_get_visible_child_name`, `gtk_widget_get_first_child/next_sibling` | `app.open-library` in `bz-update-notifier.c` |
 | Harness only: `gtk_widget_paintable_new`, `gdk_paintable_snapshot`, `gtk_snapshot_free_to_node`, `gsk_renderer_render_texture`, `gdk_texture_save_to_png`, `gtk_window_list_toplevels`, `gtk_widget_activate_action` | screenshots (`harness.c`, `app-shot.c`) |
 | `app-shot.c` only: `gsk_cairo_renderer_new`, `gsk_renderer_realize_for_display`, `gsk_renderer_unrealize` | the window's own GPU renderer rendered only the background of Bazaar's window offscreen |
 
@@ -254,6 +288,7 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 | `AdwAlertDialog`: `adw_alert_dialog_new`, `add_responses`, `set_response_appearance`, `set_default_response`, `set_close_response`, `choose`, `choose_finish`; `ADW_RESPONSE_SUGGESTED` | **1.5** (binding minimum) |
 | `AdwClamp` (hook H4, `maximum-size`) | 1.0 |
 | `AdwStatusPage:child` (hook H4) | 1.0 |
+| `AdwViewStack`: `adw_view_stack_get_child_by_name`, `adw_view_stack_get_visible_child_name` (`app.open-library` checks the window shows its `installed` page) | 1.0 |
 
 **Behaviour the code depends on:** `adw_expander_row_set_enable_expansion (TRUE)`
 also *expands* the row. `sync_ui ()` therefore calls
@@ -276,12 +311,20 @@ harmless.
 | Template callbacks receive the template object only when the Blueprint handler is written `$cb(template)` (swapped) | Blueprint/GtkBuilder convention, used across upstream | all `clicked => $…(template)` in the card | compile + click test |
 | `po/POTFILES.in` alphabetical list | `po/POTFILES.in` | hook H5 | DIFF.md H5 |
 | Flatpak manifest `finish-args` | `build-aux/flatpak/io.github.kolunmi.Bazaar.json` | hook H6 | DIFF.md H6 |
-| Action `window.open-library` (Ctrl+D) | `src/bz-window.c` | **testing only** (screenshot shim) | `grep -n open-library src/bz-window.c` |
+| Action `window.open-library` (Ctrl+D) | `src/bz-window.c` | `app.open-library` (notification click) and the screenshot shim | `grep -n open-library src/bz-window.c` |
+| `BzWindow` shows pages in an `AdwViewStack` with a page named `installed` (Library), inside a `GtkStack` whose page `loading` is shown while Bazaar refreshes | `src/bz-window.blp` | `app.open-library` stops retrying once `installed` is visible and `loading` is not | `grep -n 'name: "installed"\|"loading"' src/bz-window.blp` |
+| `run_update_worker ()` reads `auto-update` early and returns when it is false; spawned hourly by `bazaar-daemon` as `bazaar --run-update-worker` | `src/update-worker.c`, `src/bazaar-daemon.c` (`on_update_timer`) | hook H7; notifications only arrive while the daemon runs | DIFF.md H7 |
+| `bazaar-daemon` exits 5 s after going idle unless `auto_update_enabled ()` (reads settings via `popen ("gsettings get …")`) | `src/bazaar-daemon.c` (`on_idle_timeout`) | hook H8 | DIFF.md H8 |
+| `app_actions` registered in `bz_application_init ()` | `src/bz-application.c` | hook H9 | DIFF.md H9 |
+| GSettings schema `io.github.kolunmi.Bazaar`, path `/io/github/kolunmi/Bazaar/`; keys `auto-update`, `auto-update-notifications` exist | `data/io.github.kolunmi.Bazaar.gschema.xml` | hook H10 adds two keys; notifier reads `auto-update` only through the worker | DIFF.md H10 |
+| Per-user autostart file name `bazaar.desktop` (`AUTOSTART_DESKTOP_FILE_NAME`) | `src/bz-preferences-dialog.c` | H11's system file has the same name so the per-user one overrides it | `grep -n AUTOSTART_DESKTOP_FILE_NAME src/bz-preferences-dialog.c` |
+| `bz_flatpak_setup_host_environment ()`, `bz_flatpak_new_user_installation (GError **)` | `src/bz-flatpak-private.h` | Flatpak count in `bz-update-notifier.c` (same calls as upstream's worker) | `grep -n "bz_flatpak_setup_host_environment\|bz_flatpak_new_user_installation" src/bz-flatpak-private.h` |
+| `config.h` defines `APPLICATION_ID` (`io.github.kolunmi.Bazaar`) | `meson.build` | notification `app_id` | `grep -n APPLICATION_ID meson.build` |
 | Upstream build/run quirks: refresh worker spawned as `bazaar` from `PATH`; `scripts/countries.py` needs `python3-babel` | `src/bz-application.c`, `src/meson.build` | **verification only** | TEST.md §0, T6 |
 
 The patch does **not** use `BzBackend`, `BzEntry`, `BzStateInfo`,
-`BzTransactionManager`, libdex, libflatpak or any Vala-generated API. Changes
-there do not affect it.
+`BzTransactionManager`, libdex or any Vala-generated API. Changes there do
+not affect it. It uses libflatpak only to count updates (§3.2a).
 
 ### 3.7 Blueprint language features used
 

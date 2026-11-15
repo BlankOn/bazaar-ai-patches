@@ -1,21 +1,28 @@
 # TEST: verifying the APT system-updates patch
 
 How to test the patch **after it has been applied** (PLAN.md §5.1–§5.3).
-Read [PLAN.md](PLAN.md) first. Tests T1–T6 are automated and read-only.
-T7 is a visual comparison, T8 lists manual tests (two of them really upgrade
-the machine), and the **last step, T9, runs the real Bazaar app**.
+Read [PLAN.md](PLAN.md) first. Tests T1–T6 are automated and read-only;
+T7 (opt-in) sends a real desktop notification. T8 is a visual comparison
+(English and Indonesian), T9 lists manual tests (two of them really upgrade
+the machine), and the **last step, T10, runs the real Bazaar app**.
+
+The commands below run from the repository root with this directory at
+`ai-patches/`. To run the scripts from a copy elsewhere (for example
+`../bazaar-ai-patches`), set `BZ_REPO` to the Bazaar tree:
+`BZ_REPO=$PWD ../bazaar-ai-patches/patches/harness/run-tests.sh`.
 
 | Test | What it proves | How | Changes the system? |
 |---|---|---|---|
-| T1 | applied files match `patches/src/`, every hook is in place, Flatpak manifest valid | `run-tests.sh` | no |
+| T1 | applied files match `patches/src/` and `patches/data/`, every hook is in place, translations merged and valid, Flatpak manifest valid | `run-tests.sh` | no |
 | T2 | the patch's C code compiles standalone with `-Werror` | `run-tests.sh` | no |
 | T3 | the full Bazaar build succeeds, no warnings from the patch's files | `run-tests.sh` | no |
 | T4 | the card's numbers (upgrades, security, new, removals) match PackageKit **and** apt | `run-tests.sh` | no |
 | T5 | the card renders in the standalone harness | `run-tests.sh` | no |
 | T6 | the card renders on the Library page of the **real app** | `run-tests.sh` | no |
-| T7 | screenshots look right | by eye | no |
-| T8 | buttons and error paths behave | by hand | ⚠️ two rows upgrade the machine |
-| T9 | run Bazaar and use it | by hand | no (unless you click update) |
+| T7 | the update worker counts Flatpak and APT updates and sends the notification | `run-tests.sh --notify` | posts a notification; sets `last-update-notification` |
+| T8 | screenshots look right, in English and Indonesian | by eye | no |
+| T9 | buttons, error paths and the notification click behave | by hand | ⚠️ two rows upgrade the machine |
+| T10 | run Bazaar and use it | by hand | no (unless you click update) |
 
 ## 0. Prerequisites
 
@@ -37,15 +44,16 @@ sudo apt install python3-gi gir1.2-packagekitglib-1.0
 - `pkcon` (`packagekit-tools`) is **not** needed. Some distributions,
   BlankOn included, do not ship it; T4 asks PackageKit through its Python
   bindings instead.
-- Quit any running Bazaar before T6/T9 (`flatpak kill io.github.kolunmi.Bazaar`):
+- T1 needs `gettext` (`msgattrib`, `msgcat`, `msgfmt`) for the translation check.
+- Quit any running Bazaar before T6/T10 (`flatpak kill io.github.kolunmi.Bazaar`):
   it owns the application ID and would receive the window instead of the build.
 
-## 1. Run the automated tests (T1–T6)
+## 1. Run the automated tests (T1–T7)
 
 From the repository root:
 
 ```bash
-ai-patches/patches/harness/run-tests.sh
+ai-patches/patches/harness/run-tests.sh --notify
 ```
 
 It takes about 3 minutes (most of it T6 waiting for Bazaar's startup refresh)
@@ -53,34 +61,43 @@ and ends with a summary like:
 
 ```text
 === Summary
-PASS  T1  static checks (sync, markers, manifest)
+PASS  T1  static checks (sync, markers, translations, manifest)
 PASS  T2  standalone harness builds with -Werror
 PASS  T3  full Bazaar build, no patch warnings
 PASS  T4  card counts match PackageKit and apt
 PASS  T5  harness screenshots
 PASS  T6  real Bazaar app: Library page screenshots
+PASS  T7  update worker sends the updates-available notification
 Screenshots: <repo>/build/apt-tests
 ```
 
 The exit status is 0 only if everything passed. `--no-app` skips T6, for a
-machine without a full build. Each test can also be run on its own, as
+machine without a full build; without `--notify`, T7 is skipped. Each test can also be run on its own, as
 described below.
 
 ### T1: static checks
 
-Compares every file in `patches/src/` with its applied copy in `src/`,
-checks that every hooked file carries the `DOWNSTREAM PATCH (APT system updates)`
-marker, and validates the Flatpak manifest (the JSON file cannot carry the
-marker, so the script checks for the PackageKit permission instead).
-By hand:
+Compares every file in `patches/src/` and `patches/data/` with its applied
+copy, checks that every hooked file carries the
+`DOWNSTREAM PATCH (APT system updates)` marker, re-runs
+`patches/po/merge-translations.py` and fails if it still had something to
+add (hook H12 not applied), checks `po/id.po` with `msgfmt -c`, and
+validates the Flatpak manifest (the JSON file cannot carry the marker, so
+the script checks for the PackageKit permission instead). By hand:
 
 ```bash
-for f in ai-patches/patches/src/*; do cmp "$f" "src/$(basename "$f")" || echo "OUT OF SYNC: $f"; done
+for f in ai-patches/patches/src/* ai-patches/patches/data/*; do cmp "$f" "$(basename "$(dirname "$f")")/$(basename "$f")" || echo "OUT OF SYNC: $f"; done
 ```
 
 ```bash
-git grep --untracked -c "DOWNSTREAM PATCH (APT system updates)" -- src po
+git grep --untracked -c "DOWNSTREAM PATCH (APT system updates)" -- src data po
 ```
+
+```bash
+python3 ai-patches/patches/po/merge-translations.py && msgfmt -c --statistics -o /dev/null po/id.po
+```
+
+The first line must say `id: nothing to add`.
 
 ```bash
 python3 -m json.tool build-aux/flatpak/io.github.kolunmi.Bazaar.json >/dev/null && echo valid
@@ -188,7 +205,39 @@ and puts `build/src` on `PATH` (Bazaar re-executes itself by name for its
 refresh worker). See [Troubleshooting](#troubleshooting) for what did not
 work.
 
-## 2. T7: compare the screenshots
+### T7: notification (opt-in)
+
+```bash
+mkdir -p build/schemas && cp data/io.github.kolunmi.Bazaar.gschema.xml build/schemas/ && glib-compile-schemas build/schemas
+```
+
+```bash
+GSETTINGS_SCHEMA_DIR=$PWD/build/schemas BAZAAR_NOTIFY_NOW=1 G_MESSAGES_DEBUG="BAZAAR::NOTIFY BAZAAR::APT" build/src/bazaar --run-update-worker
+```
+
+This is exactly what `bazaar-daemon` runs every hour (hook H7);
+`BAZAAR_NOTIFY_NOW=1` skips the once-a-day check. Expected, within a few
+seconds (longer when PackageKit refreshes its lists first):
+
+```text
+BAZAAR::APT-DEBUG: Using PackageKit backend 'Debian APT'
+BAZAAR::APT-DEBUG: GetUpdates: 1393 upgrades (0 security), 61 new, 3 removals
+BAZAAR::NOTIFY-DEBUG: Pending updates: 4 apps, 1393 system (0 security)
+BAZAAR::NOTIFY-DEBUG: Sent the update notification through org.gtk.Notifications
+```
+
+and a notification on the desktop: **Updates Available** — "1393 system
+updates from Debian APT are available. 4 app updates are available." with
+a **View Updates** button. "N apps" must equal the Flatpak count on the
+Library page ("N Available Updates"); "N system" must equal T4's upgrades.
+The run also records the time in `last-update-notification`, so the real
+daily notification may skip that day. With `auto-update` on, the line says
+`0 apps` (upstream installs Flatpak updates itself).
+
+G_MESSAGES_DEBUG takes **space**-separated domains; a comma-separated list
+silently shows nothing.
+
+## 2. T8: compare the screenshots
 
 Open `build/apt-tests/` and compare with
 [`patches/harness/expected-library-page.png`](patches/harness/expected-library-page.png):
@@ -199,20 +248,43 @@ Open `build/apt-tests/` and compare with
   (not upgrades + new + removals).
 - Subtitle: "Includes S security updates" when there are any, then
   "· K new packages" and "· R packages will be removed" when non-zero.
-  With none of those it says "Provided by APT".
+  With none of those it says "Provided by Debian APT".
 - Expanded: packages to be **removed come first**, each with "Will be removed"
   and a red trash icon; then security updates (warning icon), other updates
   (new version as subtitle), and new packages ("New package, VERSION").
   At most 100 rows, then "And K more packages".
 - Buttons: ⟳ and **Restart & Update** with a ▾ menu.
 
-## 3. T8: manual functional tests
+**Indonesian.** The dev build is not installed, so it cannot find its
+translations; the harness can load them:
 
-Run Bazaar as in T9, open **Library** (Ctrl+D).
+```bash
+mkdir -p build/apt-tests/locale/id/LC_MESSAGES && msgfmt -o build/apt-tests/locale/id/LC_MESSAGES/bazaar.mo po/id.po
+```
+
+```bash
+LANGUAGE=id HARNESS_LOCALEDIR=$PWD/build/apt-tests/locale HARNESS_ICONS=$PWD/src/icons HARNESS_EXPAND=1 HARNESS_SHOT=build/apt-tests/harness-id.png HARNESS_DELAY=12 build/apt-harness/harness
+```
+
+Expected: "Pembaruan Sistem", "1393 Pembaruan Paket Sistem",
+"61 paket baru · 3 paket akan dihapus", "Akan dihapus" on removals,
+"Mulai Ulang & Perbarui". No English text from the patch may remain (the
+package names and versions are data, not text). The notification strings
+can be checked with gettext's own tools:
+
+```bash
+LANGUAGE=id TEXTDOMAINDIR=$PWD/build/apt-tests/locale TEXTDOMAIN=bazaar ngettext '%u system update from %s is available.' '%u system updates from %s are available.' 2
+```
+
+Expected: `Tersedia %u pembaruan sistem dari %s.`
+
+## 3. T9: manual functional tests
+
+Run Bazaar as in T10, open **Library** (Ctrl+D).
 
 | Scenario | How | Expected |
 |---|---|---|
-| Updates pending | normal start | counts as in T4/T7 |
+| Updates pending | normal start | counts as in T4/T8 |
 | Up to date | after updating | "System Is Up to Date", only ⟳ shown |
 | Refresh | click ⟳ | polkit prompt may appear; progress row with live status ("Downloading repository information", …), then the updated list |
 | Cancel | Cancel while refreshing | stops, no error row |
@@ -223,14 +295,19 @@ Run Bazaar as in T9, open **Library** (Ctrl+D).
 | No PackageKit | `sudo systemctl mask --now packagekit` (unmask after: `sudo systemctl unmask packagekit`) | card hidden, Bazaar otherwise unchanged |
 | No permission | Flathub build without overrides (PLAN.md §7) | card hidden |
 | Zero Flatpaks | no Flatpak apps installed | card shown on the "No Apps Found" page |
+| Notification action | Bazaar running: `gapplication action io.github.kolunmi.Bazaar open-library` | the window comes up on the Library page, also while it is still loading |
+| Notification click | installed package: click the notification (T7) or **View Updates** | Bazaar starts (or comes to front) on the Library page. With Flathub's Bazaar also installed, it may open that one instead (PLAN.md §9) |
+| Notifications off | `gsettings set io.github.kolunmi.Bazaar update-notifications false`, run T7's worker command | `Update notifications are disabled`, no notification; log in again: no `bazaar-daemon` started by `/etc/xdg/autostart/bazaar.desktop`. Turn it back on afterwards |
+| Daily limit | run T7's command twice **without** `BAZAAR_NOTIFY_NOW` | second run logs `Skipping: notified N seconds ago` |
+| Daemon stays | installed package, log in, wait 10 s, `pgrep -a bazaar-daemon` | daemon running (`journalctl --user` / its log says "update notifications are on so staying alive") |
 
 ⚠️ **Offline update** and **Live update** really upgrade the machine, including
 the removals the card lists. Only run them on a machine where that is wanted,
 and when the person who owns it agrees.
 
-## 4. T9: run Bazaar (final step)
+## 4. T10: run Bazaar (final step)
 
-After T1–T8, run the patched Bazaar from the build directory and use it
+After T1–T9, run the patched Bazaar from the build directory and use it
 normally:
 
 ```bash
@@ -244,7 +321,7 @@ PATH=$PWD/build/src:$PATH GSETTINGS_SCHEMA_DIR=$PWD/build/schemas G_MESSAGES_DEB
 Expected terminal output while it starts:
 
 ```text
-BAZAAR::APT-DEBUG: Using PackageKit backend 'APT'
+BAZAAR::APT-DEBUG: Using PackageKit backend 'Debian APT'
 BAZAAR::APT-DEBUG: Package lists were refreshed N seconds ago
 BAZAAR::APT-DEBUG: GetUpdates: U upgrades (S security), K new, R removals
 ```
@@ -259,7 +336,7 @@ GTK renderer bug, not this patch: prefix the command with `GSK_RENDERER=gl`
 ## 5. Record the result
 
 Add a row to PLAN.md §10 "Attempt log" with the summary of
-`run-tests.sh`, T4's numbers, and which T8 rows were run.
+`run-tests.sh`, T4's and T7's numbers, and which T9 rows were run.
 
 ## Troubleshooting
 
@@ -274,4 +351,7 @@ Lessons from earlier runs:
 | "A Bazaar instance is already running" | the Flatpak Bazaar owns the app ID | `flatpak kill io.github.kolunmi.Bazaar` |
 | build fails at `countries.gvariant` | upstream needs `python3-babel` | install it |
 | Search page shows missing text, blank category tiles (upstream commit too) | bug in GTK **4.23.4**'s default **Vulkan** renderer (seen 2026-11-14 on AMD Radeon Cezanne, Wayland); the same render tree draws correctly with the GL and Cairo renderers, so it is not Bazaar or this patch | run Bazaar with `GSK_RENDERER=gl`; GTK 4.24.1 likely fixes it (untested). Check the renderer with `GSK_DEBUG=renderer` |
+| T7 prints nothing at all | `G_MESSAGES_DEBUG` with commas (`BAZAAR::NOTIFY,BAZAAR::APT`) matches no domain | separate domains with spaces, or use `G_MESSAGES_DEBUG=all` |
+| Notification shows, click opens Flathub's Bazaar | both builds installed; the D-Bus name `io.github.kolunmi.Bazaar` activates the Flatpak one | test the action with `gapplication action` against the running dev build (T9), or remove the Flatpak while testing |
+| `msgfmt: duplicate message definition` after merging | an obsolete `#~` entry with the same msgid was left in `po/<lang>.po` | the merge script removes it; do not append fragment entries by hand |
 | `APP_SHOT_DEBUG=1` | logs every shim tick: pid, window type, mapped | for debugging T6 |

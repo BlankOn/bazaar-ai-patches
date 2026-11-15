@@ -10,7 +10,7 @@
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/../../.." && pwd)"
+REPO="${BZ_REPO:-$(cd "$HERE/../../.." && pwd)}"
 OUT="$(realpath -m "${1:?usage: app-shot.sh OUT.png [delay-seconds]}")"
 DELAY="${2:-40}"
 BUILD="$REPO/build"

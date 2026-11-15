@@ -14,7 +14,7 @@
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/../../.." && pwd)"
+REPO="${BZ_REPO:-$(cd "$HERE/../../.." && pwd)}"
 SRC="$(cd "${BZ_APT_SRC:-$REPO/src}" && pwd)"
 OUT="${1:-$REPO/build/apt-harness}"
 

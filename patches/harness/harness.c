@@ -10,11 +10,14 @@
  *   HARNESS_DELAY=20                  seconds to wait before the screenshot
  *   HARNESS_EXPAND=1                  expand the package list 2 s before the screenshot
  *   HARNESS_HEIGHT=640                window height in pixels
+ *   HARNESS_LOCALEDIR=/path           load translations (bazaar.mo) from there,
+ *                                     e.g. with LANGUAGE=id
  */
 
 #include <stdlib.h>
 
 #include <adwaita.h>
+#include <glib/gi18n.h>
 
 #include "bz-apt-updates-card.h"
 
@@ -116,6 +119,13 @@ main (int    argc,
       char **argv)
 {
   g_autoptr (AdwApplication) app = NULL;
+
+  if (g_getenv ("HARNESS_LOCALEDIR") != NULL)
+    {
+      bindtextdomain ("bazaar", g_getenv ("HARNESS_LOCALEDIR"));
+      bind_textdomain_codeset ("bazaar", "UTF-8");
+      textdomain ("bazaar");
+    }
 
   app = adw_application_new ("io.github.kolunmi.BazaarAptHarness", G_APPLICATION_NON_UNIQUE);
   g_signal_connect (app, "activate", G_CALLBACK (activate), NULL);

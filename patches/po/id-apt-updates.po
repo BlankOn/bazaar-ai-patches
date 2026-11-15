@@ -1,0 +1,222 @@
+# DOWNSTREAM PATCH (APT system updates): Indonesian translations of the
+# strings added by the patch (see ai-patches/PLAN.md, "Translations").
+# Merged into po/id.po; translations already in po/id.po take precedence.
+# Copyright (C) 2026 The Bazaar Contributors
+# This file is distributed under the same license as the bazaar package.
+# Herpiko Dwi Aguno <herpiko@gmail.com>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: bazaar\n"
+"PO-Revision-Date: 2026-11-15 02:00+0700\n"
+"Last-Translator: Herpiko Dwi Aguno <herpiko@gmail.com>\n"
+"Language-Team: Indonesian\n"
+"Language: id\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Debian APT"
+msgstr "APT Debian"
+
+msgid "Waiting in queue"
+msgstr "Menunggu dalam antrean"
+
+msgid "Starting"
+msgstr "Memulai"
+
+msgid "Running"
+msgstr "Berjalan"
+
+msgid "Querying"
+msgstr "Memeriksa"
+
+msgid "Getting information"
+msgstr "Mengambil informasi"
+
+msgid "Refreshing package lists"
+msgstr "Menyegarkan daftar paket"
+
+msgid "Downloading packages"
+msgstr "Mengunduh paket"
+
+msgid "Installing packages"
+msgstr "Memasang paket"
+
+msgid "Updating packages"
+msgstr "Memperbarui paket"
+
+msgid "Cleaning up"
+msgstr "Membersihkan"
+
+msgid "Resolving dependencies"
+msgstr "Menyelesaikan dependensi"
+
+msgid "Checking signatures"
+msgstr "Memeriksa tanda tangan"
+
+msgid "Testing changes"
+msgstr "Menguji perubahan"
+
+msgid "Committing changes"
+msgstr "Menerapkan perubahan"
+
+msgid "Finished"
+msgstr "Selesai"
+
+msgid "Cancelling"
+msgstr "Membatalkan"
+
+msgid "Downloading package lists"
+msgstr "Mengunduh daftar paket"
+
+msgid "Loading cache"
+msgstr "Memuat cache"
+
+msgid "Waiting for package manager lock"
+msgstr "Menunggu kunci manajer paket"
+
+msgid "Waiting for authentication"
+msgstr "Menunggu autentikasi"
+
+msgid "Running hooks"
+msgstr "Menjalankan kait"
+
+msgid "The package manager stopped unexpectedly"
+msgstr "Manajer paket berhenti secara tak terduga"
+
+msgid "Some updates come from an untrusted source and were not installed"
+msgstr "Beberapa pembaruan berasal dari sumber yang tidak tepercaya dan tidak dipasang"
+
+msgid "The package manager reported an unknown error"
+msgstr "Manajer paket melaporkan kesalahan yang tidak diketahui"
+
+msgid "Working"
+msgstr "Memproses"
+
+msgid "System Package Changes Pending"
+msgstr "Perubahan Paket Sistem Tertunda"
+
+#, c-format
+msgid "Provided by %s"
+msgstr "Disediakan oleh %s"
+
+msgid " · "
+msgstr " · "
+
+msgid "System Is Up to Date"
+msgstr "Sistem Sudah Mutakhir"
+
+msgid "Will be removed"
+msgstr "Akan dihapus"
+
+msgid "This package will be removed"
+msgstr "Paket ini akan dihapus"
+
+#, c-format
+msgid "New package, %s"
+msgstr "Paket baru, %s"
+
+msgid "Security update"
+msgstr "Pembaruan keamanan"
+
+msgid "Install Updates Now?"
+msgstr "Pasang Pembaruan Sekarang?"
+
+msgid "Updating the running system can make open apps misbehave until they are restarted. Installing updates on restart is safer."
+msgstr "Memperbarui sistem yang sedang berjalan dapat membuat aplikasi yang terbuka berperilaku tidak semestinya hingga dimulai ulang. Memasang pembaruan saat mulai ulang lebih aman."
+
+msgid "_Cancel"
+msgstr "_Batal"
+
+msgid "_Install Now"
+msgstr "_Pasang Sekarang"
+
+msgid "View Updates"
+msgstr "Lihat Pembaruan"
+
+msgid "Security Updates Available"
+msgstr "Pembaruan Keamanan Tersedia"
+
+msgid "Updates Available"
+msgstr "Pembaruan Tersedia"
+
+msgid "System Updates"
+msgstr "Pembaruan Sistem"
+
+msgid "System Update Failed"
+msgstr "Pembaruan Sistem Gagal"
+
+msgid "Dismiss"
+msgstr "Tutup"
+
+msgid "Updates Ready to Install"
+msgstr "Pembaruan Siap Dipasang"
+
+msgid "System updates will be installed the next time the computer restarts"
+msgstr "Pembaruan sistem akan dipasang saat komputer dimulai ulang berikutnya"
+
+msgid "C_ancel Update"
+msgstr "B_atalkan Pembaruan"
+
+msgid "_Restart Now"
+msgstr "_Mulai Ulang Sekarang"
+
+msgid "Restart Required"
+msgstr "Perlu Mulai Ulang"
+
+msgid "Restart the computer to finish applying system updates"
+msgstr "Mulai ulang komputer untuk menyelesaikan penerapan pembaruan sistem"
+
+msgid "Check for Updates"
+msgstr "Periksa Pembaruan"
+
+msgid "Restart & _Update"
+msgstr "Mulai Ulang & _Perbarui"
+
+msgid "Download updates now and install them on the next restart"
+msgstr "Unduh pembaruan sekarang dan pasang saat mulai ulang berikutnya"
+
+msgid "Install Now Without Restarting"
+msgstr "Pasang Sekarang Tanpa Mulai Ulang"
+
+#, c-format
+msgid "%u System Package Update"
+msgid_plural "%u System Package Updates"
+msgstr[0] "%u Pembaruan Paket Sistem"
+
+#, c-format
+msgid "Includes %u security update"
+msgid_plural "Includes %u security updates"
+msgstr[0] "Termasuk %u pembaruan keamanan"
+
+#, c-format
+msgid "%u new package"
+msgid_plural "%u new packages"
+msgstr[0] "%u paket baru"
+
+#, c-format
+msgid "%u package will be removed"
+msgid_plural "%u packages will be removed"
+msgstr[0] "%u paket akan dihapus"
+
+#, c-format
+msgid "And %u more package"
+msgid_plural "And %u more packages"
+msgstr[0] "Dan %u paket lainnya"
+
+#, c-format
+msgid "%u system update from %s is available."
+msgid_plural "%u system updates from %s are available."
+msgstr[0] "Tersedia %u pembaruan sistem dari %s."
+
+#, c-format
+msgid "This includes %u security update."
+msgid_plural "This includes %u security updates."
+msgstr[0] "Termasuk %u pembaruan keamanan."
+
+#, c-format
+msgid "%u app update is available."
+msgid_plural "%u app updates are available."
+msgstr[0] "Tersedia %u pembaruan aplikasi."

@@ -71,7 +71,14 @@ bz_apt_updates_get_default (void);
 gboolean
 bz_apt_updates_get_available (BzAptUpdates *self);
 
-/* Human readable backend name, e.g. "APT" */
+/* TRUE once the first update list arrived, or once it is known that there
+ * will be none (PackageKit unavailable, or the query failed). Lets a
+ * process without a running main loop (the background update worker)
+ * iterate the main context until the counts are valid. */
+gboolean
+bz_apt_updates_get_loaded (BzAptUpdates *self);
+
+/* Human readable backend name, e.g. "Debian APT" */
 const char *
 bz_apt_updates_get_backend (BzAptUpdates *self);
 

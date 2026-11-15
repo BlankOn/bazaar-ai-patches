@@ -215,6 +215,7 @@ struct _BzAptUpdates
 
   GDBusConnection *bus;
   gboolean         available;
+  gboolean         loaded;
   char            *backend;
   GListStore      *packages;
   guint            n_security;
@@ -242,6 +243,7 @@ enum
   PROP_0,
 
   PROP_AVAILABLE,
+  PROP_LOADED,
   PROP_BACKEND,
   PROP_PACKAGES,
   PROP_N_SECURITY,
@@ -276,6 +278,9 @@ run_next (BzAptUpdates *self);
 static void
 set_error (BzAptUpdates *self,
            const char   *error);
+
+static void
+set_loaded (BzAptUpdates *self);
 
 static void
 set_status (BzAptUpdates *self,
@@ -331,6 +336,9 @@ bz_apt_updates_get_property (GObject    *object,
     case PROP_AVAILABLE:
       g_value_set_boolean (value, self->available);
       break;
+    case PROP_LOADED:
+      g_value_set_boolean (value, self->loaded);
+      break;
     case PROP_BACKEND:
       g_value_set_string (value, self->backend);
       break;
@@ -385,6 +393,9 @@ bz_apt_updates_class_init (BzAptUpdatesClass *klass)
 
   props[PROP_AVAILABLE] =
       g_param_spec_boolean ("available", NULL, NULL, FALSE,
+                            G_PARAM_READABLE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
+  props[PROP_LOADED] =
+      g_param_spec_boolean ("loaded", NULL, NULL, FALSE,
                             G_PARAM_READABLE | G_PARAM_STATIC_STRINGS | G_PARAM_EXPLICIT_NOTIFY);
   props[PROP_BACKEND] =
       g_param_spec_string ("backend", NULL, NULL, NULL,
@@ -459,6 +470,13 @@ bz_apt_updates_get_available (BzAptUpdates *self)
 {
   g_return_val_if_fail (BZ_IS_APT_UPDATES (self), FALSE);
   return self->available;
+}
+
+gboolean
+bz_apt_updates_get_loaded (BzAptUpdates *self)
+{
+  g_return_val_if_fail (BZ_IS_APT_UPDATES (self), FALSE);
+  return self->loaded;
 }
 
 const char *
@@ -831,6 +849,7 @@ pk_get_all_cb (GObject      *source,
     {
       g_info ("PackageKit is not available, system updates are disabled: %s",
               local_error->message);
+      set_loaded (self);
       return;
     }
 
@@ -841,11 +860,17 @@ pk_get_all_cb (GObject      *source,
   if (name == NULL || *name == '\0' || g_strcmp0 (name, "dummy") == 0)
     {
       g_info ("PackageKit has no usable backend, system updates are disabled");
+      set_loaded (self);
       return;
     }
 
   g_clear_pointer (&self->backend, g_free);
-  self->backend   = g_strdup (description != NULL && *description != '\0' ? description : name);
+  /* Shown as "Provided by %s". PackageKit describes its apt backend as just
+   * "APT"; name the distribution family the packages come from as well. */
+  if (g_strcmp0 (name, "apt") == 0)
+    self->backend = g_strdup (_ ("Debian APT"));
+  else
+    self->backend = g_strdup (description != NULL && *description != '\0' ? description : name);
   self->available = TRUE;
 
   g_debug ("Using PackageKit backend '%s'", self->backend);
@@ -885,6 +910,7 @@ bus_ready_cb (GObject      *source,
   if (self->bus == NULL)
     {
       g_info ("No system bus, system updates are disabled: %s", local_error->message);
+      set_loaded (self);
       return;
     }
 
@@ -898,6 +924,15 @@ bus_ready_cb (GObject      *source,
 /* ------------------------------------------------------------------------ */
 /* State helpers                                                            */
 /* ------------------------------------------------------------------------ */
+
+static void
+set_loaded (BzAptUpdates *self)
+{
+  if (self->loaded)
+    return;
+  self->loaded = TRUE;
+  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_LOADED]);
+}
 
 static void
 set_error (BzAptUpdates *self,
@@ -1512,6 +1547,8 @@ txn_finish (Txn *txn)
         }
       else if (message != NULL && !txn->background)
         set_error (self, message);
+      /* The first update list (or the failure to get one) is in */
+      set_loaded (self);
       break;
 
     case TXN_REFRESH_CACHE:
@@ -1519,6 +1556,8 @@ txn_finish (Txn *txn)
         set_error (self, message);
       if (!cancelled)
         enqueue (self, TXN_GET_UPDATES, txn->background);
+      else
+        set_loaded (self);
       break;
 
     case TXN_INSTALL_NOW:

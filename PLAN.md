@@ -30,7 +30,8 @@ system up to date.
 
 **The patch adds system update capability for APT to Bazaar:** Bazaar shows
 pending system package updates and lets the user install them, next to its
-existing Flatpak updates.
+existing Flatpak updates, and **notifies on the desktop** when app (Flatpak)
+or system (APT) updates are available, so Bazaar is the one place for both.
 
 ## 2. What the user sees
 
@@ -41,7 +42,9 @@ above upstream's Flatpak "Pending Updates" section
 - **"N System Package Updates"**, where N counts **upgrades only** (equal to
   `apt list --upgradable`). Subtitle: "Includes M security updates", then
   "· K new packages" and "· R packages will be removed" when the upgrade
-  installs or removes packages; with none of those, "Provided by APT".
+  installs or removes packages; with none of those, "Provided by Debian
+  APT" (PackageKit calls its apt backend just "APT"; the patch names it
+  "Debian APT").
   It is an expander listing up to 100 packages, **removals first** ("Will be
   removed", red trash icon), then security updates (warning icon), other
   updates (new version), new packages ("New package, VERSION"); summary as
@@ -66,11 +69,35 @@ above upstream's Flatpak "Pending Updates" section
 Package lists are refreshed automatically when older than 24 hours, and the
 list refreshes itself when PackageKit reports `UpdatesChanged`.
 
+**Desktop notification** (at most once a day, only when something is
+pending), from Bazaar's background service even when Bazaar's window is
+closed:
+
+> **Updates Available** — 1393 system updates from Debian APT are available.
+> 4 app updates are available. [View Updates]
+
+- Title "Security Updates Available" (and high priority) when APT reports
+  security updates; the body then adds "This includes N security updates."
+- Clicking the notification or **View Updates** opens Bazaar on the
+  Library page.
+- With upstream's **Automatic Updates** preference on, Flatpak updates are
+  installed by upstream (which sends its own "N Apps Updated"
+  notification), so this notification covers APT only.
+- Controlled by the GSettings key `io.github.kolunmi.Bazaar
+  update-notifications` (default on), which also starts Bazaar's background
+  service at login. There is no switch in Preferences;
+  `gsettings set io.github.kolunmi.Bazaar update-notifications false`
+  turns it off, as does GNOME Settings → Notifications → Bazaar.
+
+**Indonesian:** every string the patch adds is translated
+(`patches/po/id-apt-updates.po`, merged into `po/id.po`).
+
 ## 3. Scope
 
 **In scope:** detect APT through PackageKit, list updates, refresh lists,
 apply all updates (offline by default, live optionally), progress, cancel,
-errors, reboot.
+errors, reboot; daily "updates available" notifications for APT and
+Flatpak; Indonesian translations of the patch's strings.
 
 **Out of scope (do NOT add when re-applying):**
 
@@ -78,7 +105,9 @@ errors, reboot.
   in a terminal.
 - Showing APT packages as Bazaar app entries or app pages.
 - Implementing Bazaar's `BzBackend` interface, or touching its transaction
-  manager or the background `bazaar-daemon`.
+  manager. (`bazaar-daemon` and the update worker get small hooks for the
+  notifications only.)
+- Installing APT updates automatically in the background.
 - Per-package update selection, changelogs, distribution upgrades.
 
 ## 4. How it works
@@ -102,10 +131,38 @@ errors, reboot.
  org.freedesktop.PackageKit  (packagekitd as root; apt backend; polkit auth)
 ```
 
-**The new files depend on nothing inside Bazaar** except two conventions:
+Notifications:
+
+```
+ bazaar-daemon (upstream; hook H8 keeps it alive while update-notifications is on)
+   │  started at login by /etc/xdg/autostart/bazaar.desktop (H11; condition:
+   │  update-notifications), or by upstream's per-user autostart
+   │  every hour: spawns  bazaar --run-update-worker
+   ▼
+ run_update_worker ()  src/update-worker.c (upstream; hook H7, one call)
+   │  bz_update_notifier_run (settings, auto_update)
+   ▼
+ bz-update-notifier.{c,h}   patches/src/
+   ├─ at most once per 23 h (key last-update-notification)
+   ├─ Flatpak: flatpak_installation_list_installed_refs_for_update ()
+   │     (system + user, minus .Locale/.Debug/.Sources), unless auto-update
+   │     is on or the network is metered
+   ├─ APT: bz_apt_updates_get_default (), main context iterated until
+   │     "loaded" (same PackageKit client as the card)
+   └─ org.gtk.Notifications.AddNotification ("io.github.kolunmi.Bazaar", …)
+        (GNOME Shell; falls back to the notification portal)
+                │  click → D-Bus activation of io.github.kolunmi.Bazaar
+                ▼
+ app.open-library   (bz-update-notifier.c, added by hook H9 in bz-application.c)
+   present/activate a window, repeat window.open-library until shown
+```
+
+**The card's files depend on nothing inside Bazaar** except two conventions:
 `config.h` defines `GETTEXT_PACKAGE`, and the GResource prefix is
-`/io/github/kolunmi/Bazaar/`. So upstream refactors rarely touch them; only
-the small hooks in DIFF.md need attention.
+`/io/github/kolunmi/Bazaar/`. `bz-update-notifier.c` additionally uses two
+Bazaar-internal helpers from `bz-flatpak-private.h` and `APPLICATION_ID`
+(API.md §3.6). So upstream refactors rarely touch them; mainly the hooks in
+DIFF.md need attention.
 
 ### 4.1 `BzAptUpdates` behaviour
 
@@ -140,16 +197,44 @@ the small hooks in DIFF.md need attention.
    which knows about the prepared offline update), falling back to
    `org.freedesktop.login1.Manager.Reboot (true)`.
 
+8. **`loaded`** turns TRUE once the first update list arrived, or once it
+   is known there will be none (no system bus, no PackageKit, dummy
+   backend, cancelled refresh). The update worker, which has no running
+   main loop, iterates the main context until then (timeout 300 s).
+
 Exact methods, signatures and enum values are in [API.md](API.md).
+
+### 4.2 Notification behaviour
+
+1. `bz_update_notifier_run ()` returns at once when `update-notifications`
+   is off, or when the last notification is less than 23 hours old
+   (`BAZAAR_NOTIFY_NOW=1` skips that check, for testing).
+2. Counts Flatpak updates unless `flatpak_auto_updated` (upstream installs
+   them itself) or the network is metered (listing downloads metadata).
+3. Counts APT upgrades and security upgrades through `BzAptUpdates`. New
+   and removed packages are not mentioned; the Library page shows them.
+4. Logs `Pending updates: A apps, S system (X security)` (TEST.md T7 parses
+   it). Nothing pending → no notification, timestamp unchanged.
+5. Sends notification ID `bazaar-updates-available` (a new one replaces the
+   old one) with title, body, priority, `default-action` and one button,
+   both `app.open-library`. Only after a successful send is
+   `last-update-notification` written.
+6. **Why `org.gtk.Notifications` first:** it takes the application ID
+   explicitly, so a short-lived worker process can post a notification
+   that belongs to Bazaar and whose click D-Bus-activates Bazaar. The
+   portal derives the app ID from the caller; for a non-sandboxed worker
+   that is empty, so a click could not reach Bazaar. Inside Flatpak, or on
+   desktops without GNOME Shell, the call fails and the portal is used, as
+   upstream does.
 
 ## 5. Procedure
 
 ### 5.0 Inputs
 
 - A Bazaar source tree (any version) = **the target**.
-- This `ai-patches/` directory, copied into the target root (it is portable;
-  nothing in it depends on its location except `patches/harness/build.sh`,
-  which expects to live at `<repo>/ai-patches/patches/harness/`).
+- This `ai-patches/` directory, copied into the target root (it is portable).
+  The scripts in `patches/` assume they live at `<repo>/ai-patches/patches/`;
+  to run them from a copy elsewhere, set `BZ_REPO=/path/to/bazaar`.
 
 ### 5.1 Check API stability first
 
@@ -161,25 +246,31 @@ for and lists exactly what to look at. If an API changed, adapt the code in
 ### 5.2 Copy the new files
 
 ```bash
-cp ai-patches/patches/src/bz-apt-updates.h ai-patches/patches/src/bz-apt-updates.c ai-patches/patches/src/bz-apt-updates-card.h ai-patches/patches/src/bz-apt-updates-card.c ai-patches/patches/src/bz-apt-updates-card.blp src/
+cp ai-patches/patches/src/* src/ && cp ai-patches/patches/data/* data/
 ```
 
-`patches/src/` mirrors the repository layout: every file there goes to the
-same relative path in the target. `patches/harness/` is **test-only** and is
-never copied into `src/`.
+`patches/src/` and `patches/data/` mirror the repository layout: every file
+there goes to the same relative path in the target. `patches/harness/` is
+**test-only** and is never copied. `patches/po/` is applied by a script
+(hook H12), not copied.
 
 ### 5.3 Apply the hooks
 
-Apply every hook in [DIFF.md](DIFF.md), in its order (H1 → H6). Each hook
+Apply every hook in [DIFF.md](DIFF.md), in its order (H1 → H12). Each hook
 has an *anchor* to find, the exact change, the *reason*, and what to do if
 the anchor no longer exists. Try `git apply --3way` with the unified diff in
-DIFF.md first; fall back to manual edits per hook.
+DIFF.md first (it covers H1–H11); fall back to manual edits per hook. Then
+merge the translations (H12):
+
+```bash
+python3 ai-patches/patches/po/merge-translations.py
+```
 
 ### 5.4 Build and verify
 
 Follow [TEST.md](TEST.md) (summary in [§6 Verification](#6-verification)).
-Minimum bar: `ai-patches/patches/harness/run-tests.sh` passes T1–T6 and the
-screenshots match the reference.
+Minimum bar: `ai-patches/patches/harness/run-tests.sh --notify` passes
+T1–T7 and the screenshots match the reference.
 
 ### 5.5 Record the attempt
 
@@ -188,11 +279,13 @@ result, notes). If you changed anything in `patches/src/`, keep the master
 copies and the applied copies identical:
 
 ```bash
-for f in ai-patches/patches/src/*; do cmp "$f" "src/$(basename "$f")" || echo "OUT OF SYNC: $f"; done
+for f in ai-patches/patches/src/* ai-patches/patches/data/*; do cmp "$f" "$(basename "$(dirname "$f")")/$(basename "$f")" || echo "OUT OF SYNC: $f"; done
 ```
 
 If you had to change a hook, update DIFF.md. If an API changed, update
-API.md, including the base commit. **Keep the three documents true.**
+API.md, including the base commit. If you add or change a translatable
+string, add its Indonesian translation to `patches/po/id-apt-updates.po`.
+**Keep the four documents true.**
 
 ## 6. Verification
 
@@ -201,36 +294,40 @@ Testing is described step by step in **[TEST.md](TEST.md)**. In short:
 1. Install the build and test dependencies (TEST.md §0). `pkcon` is not
    needed; the count check uses PackageKit's Python bindings
    (`gir1.2-packagekitglib-1.0`).
-2. Run the automated, read-only tests from the repository root:
+2. Run the automated tests from the repository root (`BZ_REPO=/path` when
+   running them from a copy of this directory elsewhere):
 
    ```bash
-   ai-patches/patches/harness/run-tests.sh
+   ai-patches/patches/harness/run-tests.sh --notify
    ```
 
    | Test | Checks |
    |---|---|
-   | T1 | applied copies identical to `patches/src/`, every hook marker present, manifest valid JSON |
+   | T1 | applied copies identical to `patches/src/` and `patches/data/`, every hook marker present, translations merged and valid, manifest valid JSON |
    | T2 | harness (`patches/harness/build.sh`) compiles the patch with `-Werror` |
    | T3 | full Bazaar build, no warnings from the patch's files |
    | T4 | `check-counts.py`: card's upgrades/security/new/removals equal PackageKit's, and upgrades equal `apt list --upgradable` |
    | T5 | harness screenshots, collapsed and expanded |
    | T6 | `app-shot.sh`: screenshots of the **real app's** Library page |
+   | T7 | (`--notify` only) the update worker counts Flatpak and APT updates and sends the "updates available" notification; this puts a real notification on the desktop |
 
-3. T7: compare the screenshots in `build/apt-tests/` with
-   [`patches/harness/expected-library-page.png`](patches/harness/expected-library-page.png).
-4. T8: manual tests of buttons and error paths. "Restart & Update" and
-   "Install Now" really upgrade the machine: only with the owner's consent.
-5. T9, the final step: run the patched Bazaar from the build directory and
+3. T8: compare the screenshots in `build/apt-tests/` with
+   [`patches/harness/expected-library-page.png`](patches/harness/expected-library-page.png),
+   and check the Indonesian card (TEST.md T8).
+4. T9: manual tests of buttons, error paths and the notification click.
+   "Restart & Update" and "Install Now" really upgrade the machine: only
+   with the owner's consent.
+5. T10, the final step: run the patched Bazaar from the build directory and
    use it.
 
 Test tooling lives in `patches/harness/` and is never copied into `src/`:
 
 | File | Purpose |
 |---|---|
-| `build.sh`, `harness.c` | standalone window with only the card |
+| `build.sh`, `harness.c` | standalone window with only the card (`HARNESS_LOCALEDIR` for translations) |
 | `check-counts.py` | T4 count comparison |
 | `app-shot.sh`, `app-shot.c` | `LD_PRELOAD` shim that screenshots the real app |
-| `run-tests.sh` | runs T1–T6 and prints a summary |
+| `run-tests.sh` | runs T1–T6 (T7 with `--notify`) and prints a summary |
 | `expected-library-page.png` | reference screenshot of the real Library page |
 
 ## 7. Runtime requirements and packaging
@@ -240,6 +337,12 @@ Test tooling lives in `patches/harness/` and is never copied into `src/`:
 | PackageKit daemon (apt backend) | `packagekit` |
 | `packagekit-offline-update.service` (offline install at boot) | `packagekit` |
 | polkit agent in the desktop session | desktop default |
+| GNOME Shell (`org.gtk.Notifications`), or any notification portal backend | `gnome-shell` / `xdg-desktop-portal-*` |
+| `gsettings` (the daemon reads `update-notifications` with it, like upstream reads `auto-update`) | `libglib2.0-bin` |
+
+Packaging: the build now also installs
+`$sysconfdir/xdg/autostart/bazaar.desktop` (hook H11); a Debian package
+must list `etc/xdg/autostart/bazaar.desktop` in its `.install` file.
 
 Flatpak builds need D-Bus permissions (DIFF.md hook H6). The **Flathub**
 Bazaar does not have them, so the card stays hidden there. They can be
@@ -279,10 +382,39 @@ GLib), not `libpackagekit-glib2`.
   "Restart & Update" removes those packages.
 - **Card placed twice** (content page and "No Apps Found" page): upstream
   replaces the whole content with the empty page when no Flatpak apps exist.
+- **Notifications in the existing background machinery.** Upstream already
+  has a login-started daemon that runs an hourly worker, but both only run
+  while Flatpak auto-update is on. The patch keeps that structure and adds
+  one call in the worker, one condition in the daemon's idle exit, and a
+  system autostart file, instead of a separate notifier service.
+- **Autostart file named `bazaar.desktop`** with
+  `X-GNOME-Autostart-Condition=GSettings io.github.kolunmi.Bazaar
+  update-notifications`. Upstream writes `~/.config/autostart/bazaar.desktop`
+  when the user enables automatic updates; the same name makes that per-user
+  file replace the system one, so the daemon never starts twice.
+- **One notification for both sources, once a day.** Matches GNOME
+  Software's cadence; a replaced notification (fixed ID) never piles up.
+- **No Preferences switch.** Kept the hooks small (a switch would touch
+  upstream's Preferences dialog); the GSettings key and GNOME's per-app
+  notification switch cover turning it off.
+- **"Debian APT"** instead of PackageKit's "APT": the user asked for it
+  (2026-11-15). Only the apt backend is renamed; other backends keep
+  PackageKit's description.
+- **Translations as a fragment plus a merge script** instead of a diff of
+  `po/id.po`: upstream's translators change `po/id.po` constantly, so a diff
+  would conflict on every re-apply. The script only appends missing
+  entries, so upstream translations always win and re-running is harmless.
 
 ## 9. Known limitations
 
-- `bazaar-daemon` (background notifications) does not know about APT updates.
+- The first notification comes up to an hour after login (the daemon's
+  timer), then at most once a day.
+- A notification click opens whatever owns `io.github.kolunmi.Bazaar` on
+  D-Bus. With both the patched native Bazaar and Flathub's Bazaar installed,
+  that can be the Flatpak one, which lacks `app.open-library` and just
+  opens its main window.
+- Notification strings are translated only into Indonesian (other languages
+  fall back to English for the patch's strings).
 - No per-package selection (same as GNOME Software on Debian).
 - Only the new version is shown; `GetUpdates` does not return the installed one.
 - No changelog view (`GetUpdateDetail` unused).
@@ -303,3 +435,4 @@ Append one row per attempt. Never delete rows.
 | 2026-11-14 | `9560ad18cd60652aae10e81708ff4d36df775aa8` | 0.10.1 (`v0.10.0-29-g9560ad18`) | ✅ Applied, full build clean, card verified in the real app | Original implementation. BlankOn (Debian-based), GTK 4.23.4, libadwaita 1.9.2, GLib 2.89.4, PackageKit 1.3.6 (apt). Offline/live install buttons not exercised (would upgrade the dev machine). |
 | 2026-11-14 | `9560ad18cd60652aae10e81708ff4d36df775aa8` | 0.10.1 (`v0.10.0-29-g9560ad18`) | ✅ Re-applied from `../bazaar-ai-patches` onto clean tree; `git apply --3way` clean, harness + full build with no warnings, harness card shows 1457 updates | Same base commit, so API check trivial. Install buttons not exercised. |
 | 2026-11-14 | `9560ad18cd60652aae10e81708ff4d36df775aa8` | 0.10.1 (`v0.10.0-29-g9560ad18`) | ✅ Count fix + TEST.md; `run-tests.sh` T1–T6 all PASS, real app screenshot taken | Card said 1457 updates vs apt's 1393: PackageKit's `GetUpdates` also lists 61 new and 3 removed packages. Title now counts upgrades only (1393 = apt), subtitle/list show new and removed packages. Added TEST.md, `run-tests.sh`, `check-counts.py`, `app-shot.{sh,c}`, harness `HARNESS_EXPAND`/`HARNESS_HEIGHT`; refreshed `expected-library-page.png`. `pkcon` unavailable on BlankOn, replaced by PackageKit Python bindings. Install buttons not exercised. |
+| 2026-11-15 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (applied on top of the user's commit `3c12e48a`) | 0.10.1 | ✅ Notifications + "Debian APT" + Indonesian; `run-tests.sh --notify` T1–T7 all PASS | New: `bz-update-notifier.{c,h}`, `patches/data/bazaar-update-notifications.desktop`, `patches/po/{id-apt-updates.po,merge-translations.py}`; hooks H7–H12; `BzAptUpdates:loaded`. Real notification seen via org.gtk.Notifications (4 apps, 1393 system); `app.open-library` switched a running window to Library; daemon stays alive only with `update-notifications` on; daily limit and off switch verified. DIFF.md applied to a clean base checkout reproduces the tree byte for byte. Scripts take `BZ_REPO` so they run from `../bazaar-ai-patches`. Not tested: notification click on an installed (packaged) build; login autostart. |

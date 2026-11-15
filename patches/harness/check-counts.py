@@ -20,7 +20,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+REPO = os.environ.get("BZ_REPO") or os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 HARNESS = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "build", "apt-harness", "harness")
 LINE = re.compile(r"GetUpdates: (\d+) upgrades \((\d+) security\), (\d+) new, (\d+) removals")
 
