@@ -220,3 +220,84 @@ msgstr[0] "Termasuk %u pembaruan keamanan."
 msgid "%u app update is available."
 msgid_plural "%u app updates are available."
 msgstr[0] "Tersedia %u pembaruan aplikasi."
+
+# .deb file installer (bz-deb-installer.c, bz-deb-install-dialog.*)
+msgid "Install Package"
+msgstr "Pasang Paket"
+
+msgid "Install Older Version"
+msgstr "Pasang Versi Lama"
+
+#, c-format
+msgid "Version %s is installed"
+msgstr "Versi %s sudah terpasang"
+
+#, c-format
+msgid "A newer version, %s, is installed"
+msgstr "Versi yang lebih baru, %s, sudah terpasang"
+
+msgid "This version is installed"
+msgstr "Versi ini sudah terpasang"
+
+msgid "Cannot Open This Package"
+msgstr "Paket Ini Tidak Dapat Dibuka"
+
+msgid "This Package Cannot Be Installed"
+msgstr "Paket Ini Tidak Dapat Dipasang"
+
+msgid "The file is damaged, or it is not a software package for this system."
+msgstr "Berkas rusak, atau bukan paket perangkat lunak untuk sistem ini."
+
+msgid "Other packages it needs are missing, or conflict with the installed system."
+msgstr "Paket lain yang dibutuhkan tidak tersedia, atau berbenturan dengan sistem yang terpasang."
+
+msgid "Installing packages needs PackageKit, which is not installed."
+msgstr "Pemasangan paket membutuhkan PackageKit, yang belum terpasang."
+
+msgid "Installation failed"
+msgstr "Pemasangan gagal"
+
+msgid "Technical Details"
+msgstr "Rincian Teknis"
+
+msgid "Only install packages you trust"
+msgstr "Pasang hanya paket yang Anda percayai"
+
+msgid ""
+"This package does not come from your system's software sources, so its "
+"origin cannot be checked. It can change any part of the system."
+msgstr ""
+"Paket ini tidak berasal dari sumber perangkat lunak sistem Anda, sehingga "
+"asal-usulnya tidak dapat diperiksa. Paket ini dapat mengubah bagian mana pun "
+"dari sistem."
+
+msgid "Restart Now"
+msgstr "Mulai Ulang Sekarang"
+
+msgid "Restart the computer to finish the installation."
+msgstr "Mulai ulang komputer untuk menyelesaikan pemasangan."
+
+msgid "Package"
+msgstr "Paket"
+
+msgid "Version"
+msgstr "Versi"
+
+msgid "Installed Version"
+msgstr "Versi Terpasang"
+
+msgid "Website"
+msgstr "Situs Web"
+
+msgid "Description"
+msgstr "Deskripsi"
+
+#, c-format
+msgid "Also installs or updates %u other package"
+msgid_plural "Also installs or updates %u other packages"
+msgstr[0] "Juga memasang atau memperbarui %u paket lain"
+
+#, c-format
+msgid "Removes %u package"
+msgid_plural "Removes %u packages"
+msgstr[0] "Menghapus %u paket"

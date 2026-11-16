@@ -5,7 +5,9 @@ the patch achieves, how it is built, and how to (re-)apply it to any version
 of the Bazaar codebase. The patch has two parts, applied in this order:
 
 1. **APT system updates** (sections 1–9): the System Updates card and the
-   "updates available" notifications, as hooks H1–H12.
+   "updates available" notifications, as hooks H1–H13; and the **.deb
+   file installer** ([§12](#12-deb-file-installer)): opening a downloaded
+   `.deb` file shows an install dialog, hooks H14–H15.
 2. **Rebrand to Warsi** ([§10](#10-rebrand-warsi)): turns the patched Bazaar
    into **Warsi** (`id.blankonlinux.warsi`), BlankOn Linux's app store, with
    one script, `patches/rebrand/rebrand.py`.
@@ -104,12 +106,15 @@ closed:
 **In scope:** detect APT through PackageKit, list updates, refresh lists,
 apply all updates (offline by default, live optionally), progress, cancel,
 errors, reboot; daily "updates available" notifications for APT and
-Flatpak; Indonesian translations of the patch's strings.
+Flatpak; installing a local `.deb` file the user opens (§12, added on
+2026-11-17 at the user's request, replacing GNOME Software's installer for
+`.deb` files); Indonesian translations of the patch's strings.
 
 **Out of scope (do NOT add when re-applying):**
 
-- Browsing, searching, installing or removing APT packages; users do that
-  in a terminal.
+- Browsing, searching or removing APT packages, or installing them from the
+  repositories by name; users do that in a terminal. (Opening a local
+  `.deb` file is in scope, §12.)
 - Showing APT packages as Bazaar app entries or app pages.
 - Implementing Bazaar's `BzBackend` interface, or touching its transaction
   manager. (`bazaar-daemon` and the update worker get small hooks for the
@@ -332,6 +337,7 @@ Testing is described step by step in **[TEST.md](TEST.md)**. In short:
    | T5 | harness screenshots, collapsed and expanded |
    | T6 | `app-shot.sh`: screenshots of the **real app's** Library page |
    | T7 | (`--notify` only) the update worker counts Flatpak and APT updates and sends the "updates available" notification; this puts a real notification on the desktop |
+   | D1 | `deb-check.sh`: the .deb installer's model reads generated packages (new app with launcher and icon, missing dependency, same version as installed, newer version, damaged file, missing file) and reports the right state; PackageKit only simulates; the desktop file lists the `.deb` MIME type and `bazaar-deb-mimeapps.list` makes it the default |
    | R1 | (rebranded tree only) `rebrand.py --check` has nothing left to do; a `meson install` into a temporary directory contains no Bazaar app ID or `bazaar` file name, installs every Warsi file, passes `desktop-file-validate` and `appstreamcli validate`, and has the Indonesian About note |
 
 3. T8: compare the screenshots in `build/apt-tests/` with
@@ -352,6 +358,7 @@ Test tooling lives in `patches/harness/` and is never copied into `src/`:
 | `app-shot.sh`, `app-shot.c` | `LD_PRELOAD` shim that screenshots the real app |
 | `stall-probe.sh`, `stall-probe.c` | measures how long opening the Search page freezes the real app (`--vm`: emulated VM without 3D acceleration); prints the main thread's stack while it is blocked (hook H13) |
 | `app-search.py` | GLib's desktop-file search, as Praya and GNOME Shell use it (R1) |
+| `deb-check.sh`, `deb-check.c` | D1: runs the .deb installer's model (`bz-deb-installer.c`) on generated packages; installs nothing |
 | `brand.sh` | sourced by the scripts: reads the app ID, program name and text domain from `meson.build`, so every test works on Bazaar and on Warsi |
 | `run-tests.sh` | runs T1–T6 (T7 with `--notify`, R1 on a rebranded tree) and prints a summary |
 | `expected-library-page.png` | reference screenshot of the real Library page |
@@ -365,10 +372,13 @@ Test tooling lives in `patches/harness/` and is never copied into `src/`:
 | polkit agent in the desktop session | desktop default |
 | GNOME Shell (`org.gtk.Notifications`), or any notification portal backend | `gnome-shell` / `xdg-desktop-portal-*` |
 | `gsettings` (the daemon reads `update-notifications` with it, like upstream reads `auto-update`) | `libglib2.0-bin` |
+| `dpkg-deb` and `tar` (the .deb installer reads the app's launcher and icon from the file) | `dpkg`, `tar` (both essential) |
 
 Packaging: the build now also installs
-`$sysconfdir/xdg/autostart/bazaar.desktop` (hook H11); a Debian package
-must list `etc/xdg/autostart/bazaar.desktop` in its `.install` file. After
+`$sysconfdir/xdg/autostart/bazaar.desktop` (hook H11) and
+`$sysconfdir/xdg/gnome-mimeapps.list` (hook H15); a Debian package must
+list `etc/xdg/autostart/bazaar.desktop` and `etc/xdg/gnome-mimeapps.list`
+in its `.install` file. After
 the rebrand every installed name changes; see
 [§10.4](#104-packaging-a-rebranded-build).
 
@@ -473,6 +483,7 @@ GLib), not `libpackagekit-glib2`.
   Update" has no confirmation dialog, even when packages will be removed.
 - `clang-format` was not available when the code was written; formatting
   was done by hand following `.clang-format`.
+- .deb installer limitations: see §12.5.
 
 ## 10. Rebrand: Warsi
 
@@ -582,6 +593,7 @@ A Debian package of Warsi installs different files (R1 lists them):
 - `/usr/bin/warsi`, `/usr/bin/warsi-daemon`, `/usr/bin/warsi-dl-worker`;
 - `/usr/lib/<triplet>/warsi/libwarsi-login-page.so`;
 - `/etc/xdg/autostart/warsi.desktop`;
+- `/etc/xdg/gnome-mimeapps.list` (H15: Warsi opens `.deb` files);
 - `id.blankonlinux.warsi.*` desktop, AppStream, D-Bus, systemd, search
   provider, schema and icon files;
 - translations as `warsi.mo`.
@@ -616,3 +628,111 @@ Append one row per attempt. Never delete rows.
 | 2026-11-14 | `9560ad18cd60652aae10e81708ff4d36df775aa8` | 0.10.1 (`v0.10.0-29-g9560ad18`) | ✅ Count fix + TEST.md; `run-tests.sh` T1–T6 all PASS, real app screenshot taken | Card said 1457 updates vs apt's 1393: PackageKit's `GetUpdates` also lists 61 new and 3 removed packages. Title now counts upgrades only (1393 = apt), subtitle/list show new and removed packages. Added TEST.md, `run-tests.sh`, `check-counts.py`, `app-shot.{sh,c}`, harness `HARNESS_EXPAND`/`HARNESS_HEIGHT`; refreshed `expected-library-page.png`. `pkcon` unavailable on BlankOn, replaced by PackageKit Python bindings. Install buttons not exercised. |
 | 2026-11-15 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (applied on top of the user's commit `3c12e48a`) | 0.10.1 | ✅ Notifications + "Debian APT" + Indonesian; `run-tests.sh --notify` T1–T7 all PASS | New: `bz-update-notifier.{c,h}`, `patches/data/bazaar-update-notifications.desktop`, `patches/po/{id-apt-updates.po,merge-translations.py}`; hooks H7–H12; `BzAptUpdates:loaded`. Real notification seen via org.gtk.Notifications (4 apps, 1393 system); `app.open-library` switched a running window to Library; daemon stays alive only with `update-notifications` on; daily limit and off switch verified. DIFF.md applied to a clean base checkout reproduces the tree byte for byte. Scripts take `BZ_REPO` so they run from `../bazaar-ai-patches`. Not tested: notification click on an installed (packaged) build; login autostart. |
 | 2026-11-15 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `e90c8f37`) | 0.10.1 | ✅ Rebrand to Warsi (`id.blankonlinux.warsi`), step R; `run-tests.sh --notify` with R1 | New: `patches/rebrand/` (`rebrand.py`, `bz-rebrand.{c,h}`, icons, `po/id-rebrand.po`), `patches/harness/brand.sh`; `merge-translations.py` takes fragment arguments; app-shot gains `APP_SHOT_ABOUT`. `rebrand.py --check` clean after one run; installed tree has no Bazaar ID or file name; desktop file and AppStream valid; About dialog shows the note above Bazaar's section (screenshot). 86 translations in 15 languages marked fuzzy (none Indonesian). Uninstalled, T7's notification goes through the portal (no desktop file for the new ID). Not tested: an installed Warsi (notification click, autostart, GNOME search provider). |
+| 2026-11-17 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `1e2931e4`) | 0.10.1 | ✅ .deb file installer (§12), hooks H14–H15; D1 passes; dialog screenshots for new app, older/newer/same version, broken dependencies and damaged file | New: `bz-deb-installer.{c,h}`, `bz-deb-install-dialog.{c,h,blp}`, `patches/data/bazaar-deb-mimeapps.list`, `patches/harness/deb-check.{sh,c}`, `APP_SHOT_OPEN`; 23 Indonesian strings. `gio mime` confirms `/etc/xdg/gnome-mimeapps.list` overrides GNOME Software. DIFF.md's diff applied to a clean base plus `rebrand.py` reproduces the tree. Not tested: a real install (needs the owner's consent), Open after install. |
+
+
+## 12. .deb file installer
+
+### 12.1 Goal
+
+On BlankOn, double-clicking a downloaded `.deb` file opened GNOME Software's
+local-file installer. The user asked on 2026-11-17 that the app handle
+`.deb` files instead, so Warsi is the one place for software.
+
+### 12.2 What the user sees
+
+Opening a `.deb` (double click in Files, "Open With", or
+`bazaar path/to/file.deb`) opens the main window with an **Install
+Package** dialog:
+
+- Header: the app's icon and name, read from the launcher (`.desktop` file)
+  and icon inside the package; a package without a launcher shows its
+  package name and a generic package icon. Then the package's summary.
+- One main button, by what is installed:
+  **Install** (not installed); **Update**, with "Version X is installed";
+  **Install Older Version**, with "A newer version, X, is installed"; no
+  button but "This version is installed" (and **Open** when it has a
+  launcher). After installing: "Installed" and **Open**.
+- A warning row before installing: "Only install packages you trust …":
+  a local file has no repository signature.
+- **Details**: package name, version, installed version (when different),
+  installed size, license, website (opens the browser); an expander
+  "Also installs or updates N other packages" (dependencies from the
+  repositories), and "Removes N packages" (expanded, red) when installing
+  would remove some.
+- **Description**.
+- While installing: progress bar, PackageKit's status text, **Cancel**; the
+  dialog cannot be closed until it ends. Authentication is polkit's dialog;
+  closing it is not an error.
+- Errors: "This Package Cannot Be Installed" (dependencies missing or in
+  conflict), "Cannot Open This Package" (damaged file, wrong format, no
+  PackageKit), "Installation Failed"; apt's own message under
+  **Technical Details**.
+- "Restart Required" with **Restart Now** when the package asks for it.
+
+### 12.3 How it works
+
+```
+ bz-application.c open_location_take ()   (hook H14: name ends in .deb)
+        │
+        ▼
+ BzDebInstallDialog  patches/src/bz-deb-install-dialog.{c,h,blp}
+   AdwDialog. Pure view of the model ("changed" signal → sync_ui).
+        │
+        ▼
+ BzDebInstaller      patches/src/bz-deb-installer.{c,h}
+   One file. Plain GDBus to PackageKit, no GTK, no other Bazaar code.
+   Load:    GetDetailsLocal → GetFilesLocal → Resolve(installed) → InstallFiles(SIMULATE)
+   Install: InstallFiles (ALLOW_DOWNGRADE for an older version), interactive polkit
+   Launcher and icon: `dpkg-deb --fsys-tarfile FILE | tar -xO MEMBER`, read to
+   memory only (nothing is extracted to disk)
+```
+
+- The installed version comes from `Resolve` with the `installed` filter
+  (matching the file's architecture, or `all`). Same version → nothing to
+  install (PackageKit's apt backend does nothing for a same-version local
+  reinstall, checked on 2026-11-17), so no button is offered.
+- The action comes from the simulated install's `Package` signal for the
+  file's own package: `INSTALLING`, `UPDATING` or `DOWNGRADING`. Other
+  packages are listed by their info: installing/updating, or
+  removing/obsoleting.
+- A simulated install that fails (apt's "unmet dependencies") blocks the
+  install with apt's message as technical details.
+- PackageKit runs as root and reads the file itself. A file not on a local
+  disk (network share, GVfs FUSE path) is first copied to
+  `~/.cache/<program>/deb-staging/`.
+- Transactions send `interactive=true`, `background=false` and the
+  user's `locale` hints, like `BzAptUpdates`.
+
+### 12.4 Design decisions
+
+- **PackageKit, not `apt`/`dpkg` directly:** same daemon, polkit rules and
+  lock handling as the System Updates card; no root helper of our own.
+  GNOME Software does the same.
+- **Not ONLY_TRUSTED:** PackageKit refuses that flag for local files
+  ("Local packages cannot be authenticated"), so the install uses polkit's
+  `org.freedesktop.packagekit.package-install-untrusted` action, and the
+  dialog warns.
+- **Simulate before showing the button:** the user sees what else gets
+  installed or removed before authenticating, and a package that cannot be
+  installed says so before asking for a password.
+- **No uninstall button:** removing system packages stays out of scope
+  (§3).
+- **Default handler through `/etc/xdg/gnome-mimeapps.list`** (H15), not by
+  removing or diverting GNOME Software: both stay installable, the user's
+  own default still wins.
+
+### 12.5 Limitations
+
+- Only one file at a time (upstream opens only the first location given).
+- Icons: hicolor SVG or the largest PNG, else `/usr/share/pixmaps`; an icon
+  only in another theme falls back to the generic package icon. AppStream
+  metainfo inside the package (screenshots, long description) is not read.
+- No "Open" for apps whose launcher has `NoDisplay=true`, or for packages
+  without a launcher (libraries, command-line tools).
+- In a Flatpak build the dialog cannot work (no `dpkg-deb`, paths inside
+  the sandbox are not the host's); it shows PackageKit's error.
+- The default-handler file applies to GNOME sessions (`XDG_CURRENT_DESKTOP`
+  contains `GNOME`) only.
+- Not exercised automatically: a real install (it changes the machine).
+  TEST.md D3 is the manual test.

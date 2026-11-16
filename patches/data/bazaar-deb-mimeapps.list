@@ -1,0 +1,8 @@
+# DOWNSTREAM PATCH (APT system updates): open .deb files with Bazaar's
+# package installer by default. Installed as /etc/xdg/gnome-mimeapps.list,
+# which GNOME reads before /usr/share/applications/gnome-mimeapps.list (that
+# one names GNOME Software). A user's own choice (~/.config/mimeapps.list,
+# Files → Open With → Set as Default) still wins. See ai-patches/DIFF.md H15.
+[Default Applications]
+application/vnd.debian.binary-package=io.github.kolunmi.Bazaar.desktop
+application/x-deb=io.github.kolunmi.Bazaar.desktop

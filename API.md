@@ -84,7 +84,16 @@ python3 -c "import gi; gi.require_version('PackageKitGlib','1.0'); from gi.repos
 
 Expected output: `8 9 26 27 28 29 13 2 2 10 1 3 8 4`. (Needs `gir1.2-packagekitglib-1.0`.)
 Any difference means the constants at the top of
-`patches/src/bz-apt-updates.c` must be updated.
+`patches/src/bz-apt-updates.c` must be updated. For the .deb installer
+(`bz-deb-installer.c`):
+
+```bash
+python3 -c "import gi; gi.require_version('PackageKitGlib','1.0'); from gi.repository import PackageKitGlib as pk; print(pk.filter_bitfield_from_string('installed'), pk.transaction_flag_bitfield_from_string('simulate'), pk.transaction_flag_bitfield_from_string('allow-downgrade'), *[int(getattr(pk.InfoEnum, n)) for n in ('INSTALLED','UPDATING','INSTALLING','REMOVING','OBSOLETING','REINSTALLING','DOWNGRADING')], int(pk.ErrorEnum.TRANSACTION_CANCELLED), int(pk.ErrorEnum.NOT_AUTHORIZED))"
+```
+
+Expected output: `4 4 64 1 11 12 13 15 19 20 17 48`. TEST.md D1 exercises
+the methods themselves (GetDetailsLocal, GetFilesLocal, Resolve, simulated
+InstallFiles).
 
 To inspect a transaction object's interface, create one (harmless; it
 expires unused):
@@ -147,6 +156,12 @@ this call also D-Bus-activates the daemon.
 | `RefreshCache` | method | `(b force)` | `apt update`; called with `false` |
 | `UpdatePackages` | method | `(t transaction_flags, as package_ids)` | `only-trusted` = **2** (live); `only-trusted\|only-download` = **10** (offline prepare) |
 | `Cancel` | method | `()` | cancel button |
+| `GetDetailsLocal` | method | `(as files)` | .deb installer: package fields of a local file |
+| `GetFilesLocal` | method | `(as files)` | .deb installer: file list (to find the launcher and icon) |
+| `Resolve` | method | `(t filter, as names)` | .deb installer: installed version; filter `installed` = `1<<2` = **4** |
+| `InstallFiles` | method | `(t transaction_flags, as files)` | .deb installer: `simulate` = **4** to preview, then **0** (or `allow-downgrade` = **64**); `only-trusted` is refused for local files (error 50, "Local packages cannot be authenticated") |
+| `Details` | signal | `(a{sv})` | answer to `GetDetailsLocal`: `package-id`, `summary`, `description`, `license` (`"unknown"` when absent), `url`, `size` (installed bytes), `download-size` |
+| `Files` | signal | `(s package_id, as files)` | answer to `GetFilesLocal`; absolute paths without the tar's leading `.` |
 | `Package` | signal | `(u info, s package_id, s summary)` | one result |
 | `Packages` | signal | `(a(uss))` | batched results (PackageKit ≥ 1.3); de-duplicated with `Package` |
 | `ErrorCode` | signal | `(u code, s details)` | `details` shown to the user |
@@ -190,6 +205,19 @@ bitfields are `1 << value`):
 | `PK_RESTART_SYSTEM` / `SECURITY_SYSTEM` | 4 / 6 | `PK_RESTART_ENUM_*` |
 | `PK_PERCENTAGE_UNKNOWN` | 101 | documented sentinel |
 
+Also in `bz-deb-installer.c`:
+
+| Constant | Value | PackageKit enum |
+|---|---|---|
+| `PK_FILTER_INSTALLED` | `1<<2` = 4 | `PK_FILTER_ENUM_INSTALLED` = 2 |
+| `PK_TRANSACTION_FLAG_SIMULATE` | `1<<2` = 4 | `PK_TRANSACTION_FLAG_ENUM_SIMULATE` = 2 |
+| `PK_TRANSACTION_FLAG_ALLOW_DOWNGRADE` | `1<<6` = 64 | `PK_TRANSACTION_FLAG_ENUM_ALLOW_DOWNGRADE` = 6 |
+| `PK_INFO_INSTALLED` / `UPDATING` / `INSTALLING` / `REMOVING` / `OBSOLETING` / `REINSTALLING` / `DOWNGRADING` | 1 / 11 / 12 / 13 / 15 / 19 / 20 | `PK_INFO_ENUM_*` (a simulated `InstallFiles` reports what it would do with these) |
+| `PK_ERROR_TRANSACTION_CANCELLED` / `NOT_AUTHORIZED` | 17 / 48 | `PK_ERROR_ENUM_*` (not shown as errors) |
+
+Package IDs of local files end in `local` (`name;1.0;all;local`); of
+installed packages in `installed`, `manual:…` or `auto:…`.
+
 `status_to_string ()` maps `PkStatusEnum` values: 1 wait, 2 setup,
 3 running, 4 query, 5 info, 7 refresh-cache, 8 download, 9 install,
 10 update, 11 cleanup, 13 dep-resolve, 14 sig-check, 15 test-commit,
@@ -204,7 +232,8 @@ new enum values are harmless.
 `org.freedesktop.packagekit.system-update` (update),
 `org.freedesktop.packagekit.trigger-offline-update` (Trigger),
 `org.freedesktop.packagekit.clear-offline-update` (Offline.Cancel),
-`org.freedesktop.packagekit.cancel-foreign`.
+`org.freedesktop.packagekit.cancel-foreign`,
+`org.freedesktop.packagekit.package-install-untrusted` (.deb installer).
 
 **systemd unit:** `packagekit-offline-update.service` installs the prepared
 update at boot. Check with `systemctl cat packagekit-offline-update.service`.
@@ -268,6 +297,13 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 | `g_network_monitor_get_default`, `g_network_monitor_get_network_metered` | 2.32 / 2.46 | skip the Flatpak count on metered networks |
 | `g_dbus_connection_call_sync`, `G_DBUS_CALL_FLAGS_NO_AUTO_START` | 2.26 | notifications |
 | `g_application_activate`, `g_application_hold/release`, `g_application_get_default` | 2.28–2.32 | `app.open-library` |
+| `GSubprocess`: `g_subprocess_new`, `g_subprocess_communicate_async/_finish`, `G_SUBPROCESS_FLAGS_STDOUT_PIPE`, `STDERR_SILENCE` | 2.40 | .deb installer: `sh -c 'dpkg-deb --fsys-tarfile … \| tar -xO …'` |
+| `g_bytes_icon_new`, `g_themed_icon_new` | 2.38 / 2.20 | .deb installer: icon from the package, or by name |
+| `GKeyFile`: `g_key_file_load_from_data`, `g_key_file_get_locale_string`, `G_KEY_FILE_DESKTOP_*` | 2.6–2.14 | .deb installer: the package's launcher |
+| `GDesktopAppInfo` (`<gio/gdesktopappinfo.h>`): `g_desktop_app_info_new`, `g_desktop_app_info_new_from_filename`, `g_app_info_launch` | 2.18 | .deb installer: **Open** |
+| `g_file_is_native`, `g_file_query_filesystem_info` (`G_FILE_ATTRIBUTE_FILESYSTEM_TYPE`), `g_file_copy`, `g_get_user_cache_dir`, `g_get_prgname` | old | .deb installer: copy files PackageKit (root) cannot read |
+| `g_format_size` | 2.30 | installed size |
+| `g_dbus_error_is_remote_error`, `g_dbus_error_get_remote_error` | 2.26 | "PackageKit is not installed" (`org.freedesktop.DBus.Error.ServiceUnknown`) |
 
 ### 3.4 GTK 4
 
@@ -292,6 +328,7 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 | `gtk_application_get_active_window`, `gtk_application_get_windows`, `gtk_window_present`, `gtk_widget_activate_action`, `gtk_stack_get_child_by_name`, `gtk_stack_get_visible_child_name`, `gtk_widget_get_first_child/next_sibling` | `app.open-library` in `bz-update-notifier.c` |
 | Harness only: `gtk_widget_paintable_new`, `gdk_paintable_snapshot`, `gtk_snapshot_free_to_node`, `gsk_renderer_render_texture`, `gdk_texture_save_to_png`, `gtk_window_list_toplevels`, `gtk_widget_activate_action` | screenshots (`harness.c`, `app-shot.c`) |
 | `app-shot.c` only: `gsk_cairo_renderer_new`, `gsk_renderer_realize_for_display`, `gsk_renderer_unrealize` | the window's own GPU renderer rendered only the background of Bazaar's window offscreen |
+| .deb installer: `gtk_image_set_from_gicon/_icon_name`, `gtk_icon_theme_get_for_display`, `gtk_icon_theme_has_gicon`, `gdk_display_get_app_launch_context`, `gtk_uri_launcher_new/_launch` (4.10) | icon, **Open**, website |
 
 ### 3.5 libadwaita (patch needs ≥ 1.5; upstream requires ≥ 1.8)
 
@@ -308,6 +345,8 @@ requirement is GLib **2.70** (`G_DEFINE_FINAL_TYPE`).
 | `AdwClamp` (hook H4, `maximum-size`) | 1.0 |
 | `AdwStatusPage:child` (hook H4) | 1.0 |
 | `AdwViewStack`: `adw_view_stack_get_child_by_name`, `adw_view_stack_get_visible_child_name` (`app.open-library` checks the window shows its `installed` page) | 1.0 |
+| .deb installer: `AdwDialog` (`adw_dialog_present`, `adw_dialog_close`, `adw_dialog_set_can_close`), `AdwToolbarView`, `AdwHeaderBar`, `AdwPreferencesGroup`, `AdwExpanderRow` `[prefix]` | 1.5 / 1.4 / 1.0 |
+| .deb installer: `AdwSpinner` | **1.6** |
 
 **Rebrand (`bz-rebrand.c`):** `adw_about_dialog_get_application_name`,
 `adw_about_dialog_set_comments` (1.5), and **libadwaita's internal layout**
@@ -338,6 +377,8 @@ harmless.
 | `bz_library_page_class_init` calls `g_type_ensure (BZ_TYPE_UPDATES_CARD)` before `gtk_widget_class_set_template_from_resource` | `src/bz-library-page.c` | hook H3 | DIFF.md H3 |
 | Template callbacks receive the template object only when the Blueprint handler is written `$cb(template)` (swapped) | Blueprint/GtkBuilder convention, used across upstream | all `clicked => $…(template)` in the card | compile + click test |
 | `po/POTFILES.in` alphabetical list | `po/POTFILES.in` | hook H5 | DIFF.md H5 |
+| `open_location_take (BzApplication *, const char *name_for_suffix_check, GFile *file)` (owns `file`) is where every opened file goes; `get_or_create_window ()` declared near the top of the file | `src/bz-application.c` | hook H14 | `grep -n "open_location_take\|^get_or_create_window" src/bz-application.c` |
+| Desktop file `MimeType=` line, `Exec=bazaar-daemon %U` (files arrive as `file://` URIs) | `data/io.github.kolunmi.Bazaar.desktop.in` | hook H15 | `grep -n "MimeType\|^Exec" data/*.desktop.in` |
 | Flatpak manifest `finish-args` | `build-aux/flatpak/io.github.kolunmi.Bazaar.json` | hook H6 | DIFF.md H6 |
 | Action `window.open-library` (Ctrl+D) | `src/bz-window.c` | `app.open-library` (notification click) and the screenshot shim | `grep -n open-library src/bz-window.c` |
 | `BzWindow` shows pages in an `AdwViewStack` with a page named `installed` (Library), inside a `GtkStack` whose page `loading` is shown while Bazaar refreshes | `src/bz-window.blp` | `app.open-library` stops retrying once `installed` is visible and `loading` is not | `grep -n 'name: "installed"\|"loading"' src/bz-window.blp` |
@@ -349,6 +390,11 @@ harmless.
 | `bz_flatpak_setup_host_environment ()`, `bz_flatpak_new_user_installation (GError **)` | `src/bz-flatpak-private.h` | Flatpak count in `bz-update-notifier.c` (same calls as upstream's worker) | `grep -n "bz_flatpak_setup_host_environment\|bz_flatpak_new_user_installation" src/bz-flatpak-private.h` |
 | `config.h` defines `APPLICATION_ID` (`io.github.kolunmi.Bazaar`) | `meson.build` | notification `app_id` | `grep -n APPLICATION_ID meson.build` |
 | Upstream build/run quirks: refresh worker spawned as `bazaar` from `PATH`; `scripts/countries.py` needs `python3-babel` | `src/bz-application.c`, `src/meson.build` | **verification only** | TEST.md §0, T6 |
+
+**Default application lookup** (hook H15): freedesktop.org "Association
+between MIME types and applications" spec: `$XDG_CONFIG_DIRS/$desktop-mimeapps.list`
+is read before `$XDG_DATA_DIRS/applications/$desktop-mimeapps.list`.
+GLib implements it (`gio mime TYPE` shows the result).
 
 The patch does **not** use `BzBackend`, `BzEntry`, `BzStateInfo`,
 `BzTransactionManager`, libdex or any Vala-generated API. Changes there do

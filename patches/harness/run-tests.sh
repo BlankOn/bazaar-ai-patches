@@ -1,6 +1,6 @@
 #!/bin/sh
 # DOWNSTREAM PATCH (APT system updates): run every automated test in
-# ai-patches/TEST.md (T1-T7, and R1 on a Warsi-rebranded tree) in order.
+# ai-patches/TEST.md (T1-T7, D1, and R1 on a Warsi-rebranded tree) in order.
 # Never installs or removes packages, never reboots.
 #
 # Usage:  ai-patches/patches/harness/run-tests.sh [--no-app] [--notify]
@@ -53,7 +53,9 @@ t1_static () {
            src/update-worker.c src/bazaar-daemon.c src/bz-application.c src/main.c \
            data/meson.build "data/$APP_ID.gschema.xml" data/bazaar-update-notifications.desktop \
            src/bz-apt-updates.h src/bz-apt-updates.c src/bz-apt-updates-card.h src/bz-apt-updates-card.c src/bz-apt-updates-card.blp \
-           src/bz-update-notifier.h src/bz-update-notifier.c; do
+           src/bz-update-notifier.h src/bz-update-notifier.c \
+           src/bz-deb-installer.h src/bz-deb-installer.c src/bz-deb-install-dialog.h src/bz-deb-install-dialog.c \
+           src/bz-deb-install-dialog.blp data/bazaar-deb-mimeapps.list; do
     grep -q "DOWNSTREAM PATCH (APT system updates)" "$f" || { echo "MISSING MARKER: $f"; ok=1; }
   done
   if [ $REBRANDED = 1 ]; then
@@ -88,10 +90,11 @@ t2_harness () {
 
 t3_full_build () {
   [ -d build ] && [ -f build/build.ninja ] || meson setup build >/dev/null || return 1
-  touch src/bz-apt-updates.c src/bz-apt-updates-card.c src/bz-library-page.c src/bz-update-notifier.c
+  touch src/bz-apt-updates.c src/bz-apt-updates-card.c src/bz-library-page.c src/bz-update-notifier.c \
+        src/bz-deb-installer.c src/bz-deb-install-dialog.c src/bz-application.c
   [ $REBRANDED = 1 ] && touch src/bz-rebrand.c
   log="$(ninja -C build 2>&1)" || { echo "$log" | tail -20; return 1; }
-  if echo "$log" | grep -iE "bz-apt-updates|bz-library-page|bz-update-notifier|bz-rebrand" | grep -iqE "warning|error"; then
+  if echo "$log" | grep -iE "bz-apt-updates|bz-library-page|bz-update-notifier|bz-deb-install|bz-application|bz-rebrand" | grep -iqE "warning|error"; then
     echo "$log" | grep -iE "warning|error"; return 1
   fi
   echo "full build ok, no warnings from the patch's files"
@@ -106,7 +109,7 @@ r1_rebrand () {
   # bge-demo is libbge's demo program (not Warsi); it embeds upstream's docs
   left="$(grep -rlE "io\.github\.kolunmi\.Bazaar|io/github/kolunmi/Bazaar" "$dest" | grep -v "/bge-demo$"; find "$dest" -iname "*bazaar*")"
   [ -z "$left" ] || { echo "OLD NAME LEFT IN THE INSTALLED TREE:"; echo "$left"; ok=1; }
-  for f in bin/warsi bin/warsi-daemon bin/warsi-dl-worker etc/xdg/autostart/warsi.desktop \
+  for f in bin/warsi bin/warsi-daemon bin/warsi-dl-worker etc/xdg/autostart/warsi.desktop etc/xdg/gnome-mimeapps.list \
            "share/applications/$APP_ID.desktop" "share/metainfo/$APP_ID.metainfo.xml" \
            "share/glib-2.0/schemas/$APP_ID.gschema.xml" "share/icons/hicolor/scalable/apps/$APP_ID.svg" \
            "share/icons/hicolor/symbolic/apps/$APP_ID-symbolic.svg" "share/dbus-1/services/$APP_ID.service" \
@@ -134,6 +137,15 @@ r1_rebrand () {
   return $ok
 }
 
+d1_deb () {
+  "$HERE/deb-check.sh" || return 1
+  # the launcher offers to open .deb files, and is their default handler
+  grep -q "^MimeType=.*application/vnd.debian.binary-package;" "data/$APP_ID.desktop.in" ||
+    { echo "MISSING: .deb MIME type in data/$APP_ID.desktop.in"; return 1; }
+  grep -qx "application/vnd.debian.binary-package=$APP_ID.desktop" data/bazaar-deb-mimeapps.list ||
+    { echo "MISSING: default handler in data/bazaar-deb-mimeapps.list"; return 1; }
+}
+
 t4_counts () {
   python3 -I "$HERE/check-counts.py"
 }
@@ -150,6 +162,8 @@ t6_app () {
   "$HERE/app-shot.sh" "$OUT/app-library.png" 40 2>&1 | grep -E "APT-DEBUG|Saved|already running|^no " &&
   APP_SHOT_EXPAND=1 "$HERE/app-shot.sh" "$OUT/app-library-expanded.png" 40 2>&1 | grep -E "Saved" &&
   { [ $REBRANDED = 0 ] || APP_SHOT_ABOUT=1 "$HERE/app-shot.sh" "$OUT/app-about.png" 20 2>&1 | grep -E "Saved"; } &&
+  { [ ! -f "$OUT/deb/bz-deb-check-app_1.0_all.deb" ] ||
+    APP_SHOT_OPEN="$OUT/deb/bz-deb-check-app_1.0_all.deb" "$HERE/app-shot.sh" "$OUT/app-deb-install.png" 20 2>&1 | grep -E "Saved"; } &&
   [ -s "$OUT/app-library.png" ]
 }
 
@@ -168,6 +182,7 @@ step T3 "full $APP_BIN build, no patch warnings" t3_full_build
 [ $REBRANDED = 1 ] && step R1 "Warsi rebrand complete and installs cleanly" r1_rebrand
 step T4 "card counts match PackageKit and apt" t4_counts
 step T5 "harness screenshots" t5_harness_shots
+step D1 ".deb installer reads packages (simulated, installs nothing)" d1_deb
 case " $* " in *" --no-app "*) ;; *)
   step T6 "real $APP_BIN app: Library page (and About) screenshots" t6_app ;;
 esac

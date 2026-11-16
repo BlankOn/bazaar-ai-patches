@@ -5,9 +5,10 @@ exist upstream**: what changes, why it is needed, and how it connects to the
 entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 
 - Base commit: `9560ad18cd60652aae10e81708ff4d36df775aa8` (see [API.md §1](API.md#1-base-the-codebase-the-patch-was-written-against)).
-- Upstream files touched: **12** by hooks H1–H11 and H13 (about 170 added lines, 1
-  changed line, nothing deleted), plus `po/id.po`, which hook H12 extends
-  with a script (about 200 appended lines; one obsolete entry removed).
+- Upstream files touched: **13** by hooks H1–H11 and H13–H15 (about 190
+  added lines, 2 changed lines, nothing deleted), plus `po/id.po`, which
+  hook H12 extends with a script (about 280 appended lines; one obsolete
+  entry removed).
 - Every hook except the JSON manifest carries the marker
   `DOWNSTREAM PATCH (APT system updates)`; find them with
   `git grep -n "DOWNSTREAM PATCH (APT system updates)"`.
@@ -43,15 +44,21 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
  po/id.po ───────────────(H12)──► patches/po/id-apt-updates.po, merged by
                                    patches/po/merge-translations.py
  src/main.c ─────────────(H13)──► GSK_RENDERER=gl, or cairo on software GL, unless set
+ src/meson.build ─────────(H1)──► compiles  src/bz-deb-installer.c, src/bz-deb-install-dialog.{c,blp}
+ src/bazaar.gresource.xml ─(H2)──► embeds    bz-deb-install-dialog.ui
+ src/bz-application.c ───(H14)──► opening a *.deb → bz_deb_install_dialog_open ()
+ data/…desktop.in ───────(H15)──► MimeType: application/vnd.debian.binary-package
+ data/meson.build ───────(H15)──► installs data/bazaar-deb-mimeapps.list
+                                   as $sysconfdir/xdg/gnome-mimeapps.list (default handler)
 ```
 
 | Hook | Upstream file | New file / symbol it connects to |
 |---|---|---|
-| H1 | `src/meson.build` | `bz-apt-updates.c`, `bz-apt-updates-card.c`, `bz-apt-updates-card.blp`, `bz-update-notifier.c` |
-| H2 | `src/bazaar.gresource.xml` | `bz-apt-updates-card.ui` (compiled from the `.blp`) |
+| H1 | `src/meson.build` | `bz-apt-updates.c`, `bz-apt-updates-card.c`, `bz-apt-updates-card.blp`, `bz-update-notifier.c`, `bz-deb-installer.c`, `bz-deb-install-dialog.c`, `bz-deb-install-dialog.blp` |
+| H2 | `src/bazaar.gresource.xml` | `bz-apt-updates-card.ui`, `bz-deb-install-dialog.ui` (compiled from the `.blp` files) |
 | H3 | `src/bz-library-page.c` | `bz-apt-updates-card.h` → `BZ_TYPE_APT_UPDATES_CARD` |
 | H4 | `src/bz-library-page.blp` | `BzAptUpdatesCard` widget type |
-| H5 | `po/POTFILES.in` | `_()` strings in the four files |
+| H5 | `po/POTFILES.in` | `_()` strings in the seven files |
 | H6 | `build-aux/flatpak/io.github.kolunmi.Bazaar.json` | D-Bus names called by `bz-apt-updates.c` (see API.md §3.1–§3.2) |
 | H7 | `src/update-worker.c` | `bz_update_notifier_run ()` |
 | H8 | `src/bazaar-daemon.c` | GSettings key `update-notifications` (H10) |
@@ -60,11 +67,14 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 | H11 | `data/meson.build` | `patches/data/bazaar-update-notifications.desktop` |
 | H12 | `po/id.po` | `patches/po/id-apt-updates.po` (script, no diff) |
 | H13 | `src/main.c` | none: chooses GTK's renderer (GL; Cairo where GL is software-only) |
+| H14 | `src/bz-application.c` | `bz_deb_install_dialog_handles ()`, `bz_deb_install_dialog_open ()` (`bz-deb-install-dialog.c`) |
+| H15 | `data/io.github.kolunmi.Bazaar.desktop.in`, `data/meson.build` | `patches/data/bazaar-deb-mimeapps.list` |
 
-Apply order: H1 → H13, then R. H1–H4 are required for the card; H7–H11 for the
+Apply order: H1 → H15, then R. H1–H4 are required for the card; H7–H11 for the
 notifications (H7, H9, H10 together; H8 and H11 make them arrive without
 upstream's auto-update); H5 and H12 for translations; H6 only matters for
-Flatpak builds.
+Flatpak builds; H1, H2 and H14 for the .deb installer, H15 to make it what
+double-clicking a .deb opens.
 
 ---
 
@@ -97,8 +107,25 @@ input list, line `'bz-apps-page.blp',`. Insert after it:
     'bz-apt-updates-card.blp',
 ```
 
-**Connection:** produces `bz-apt-updates.o`, `bz-apt-updates-card.o` and
-`bz-apt-updates-card.ui` from `patches/src/`. No new `dependency()` is
+**Change 3, .deb installer sources.** Anchor: the line
+`'bz-update-notifier.c',` added by change 1. Insert after it:
+
+```meson
+  # DOWNSTREAM PATCH (APT system updates): .deb file installer
+  'bz-deb-installer.c',
+  'bz-deb-install-dialog.c',
+```
+
+**Change 4, .deb installer Blueprint.** Anchor: the line
+`'bz-apt-updates-card.blp',` added by change 2. Insert after it:
+
+```meson
+    'bz-deb-install-dialog.blp',
+```
+
+**Connection:** produces `bz-apt-updates.o`, `bz-apt-updates-card.o`,
+`bz-deb-installer.o`, `bz-deb-install-dialog.o` and the two `.ui` files
+from `patches/src/`. No new `dependency()` is
 needed: the new code uses only GLib/GIO, GTK and libadwaita, which upstream
 already links.
 
@@ -123,8 +150,14 @@ Insert after it:
     <file preprocess="xml-stripblanks">bz-apt-updates-card.ui</file>
 ```
 
-**Connection:** the `.ui` produced by H1 → resource path used in
-`patches/src/bz-apt-updates-card.c`.
+Then, for the .deb installer, after that line:
+
+```xml
+    <file preprocess="xml-stripblanks">bz-deb-install-dialog.ui</file>
+```
+
+**Connection:** the `.ui` files produced by H1 → resource paths used in
+`patches/src/bz-apt-updates-card.c` and `patches/src/bz-deb-install-dialog.c`.
 
 **If the anchor is gone:** add it next to `bz-library-page.ui` or
 `bz-updates-card.ui`. If upstream changes the `<gresource prefix=…>`, update
@@ -228,10 +261,13 @@ src/bz-apt-updates.c
 src/bz-apt-updates-card.blp
 src/bz-apt-updates-card.c
 src/bz-update-notifier.c
+src/bz-deb-installer.c
+src/bz-deb-install-dialog.blp
+src/bz-deb-install-dialog.c
 ```
 
 **Connection:** the `_()` / `ngettext ()` / Blueprint `_("…")` strings in
-the three new files. The `.h` files hold no strings.
+the seven new files. The `.h` files hold no strings.
 
 **If the anchor is gone:** insert the three lines in alphabetical position.
 
@@ -512,12 +548,106 @@ problem 2 once GTK itself avoids its GPU renderers on software GL
 
 ---
 
+## H14: `src/bz-application.c`: open .deb files in the package installer
+
+**Why:** upstream sends every file it is asked to open (command line,
+`app.open-location`, the desktop file's `%U`) through
+`open_location_take ()`, which treats anything that is not AppStream
+metainfo as a Flatpak bundle or `.flatpakref`. A `.deb` must open the
+package installer instead (PLAN.md §12).
+
+**Change 1, include.** Anchor: the H9 line `#include "bz-update-notifier.h"`.
+Insert after it:
+
+```c
+#include "bz-deb-install-dialog.h"
+```
+
+**Change 2, dispatch.** Anchor: the first statement of
+`open_location_take ()`, `if (name_for_suffix_check != NULL &&`. Insert
+before it:
+
+```c
+  /* DOWNSTREAM PATCH (APT system updates): .deb files open the package
+   * installer, see ai-patches/DIFF.md H14 */
+  if (bz_deb_install_dialog_handles (name_for_suffix_check))
+    {
+      bz_deb_install_dialog_open (file, GTK_WIDGET (get_or_create_window (self)));
+      g_object_unref (file);
+      return;
+    }
+```
+
+`open_location_take ()` owns `file`, hence the unref. It does not wait for
+upstream's Flatpak loading (`ready_to_open_files`): the installer needs
+only PackageKit.
+
+**Connection:** `bz_deb_install_dialog_handles ()` (true for a name ending
+in `.deb`, any case) and `bz_deb_install_dialog_open ()`, which creates a
+`BzDebInstaller` (`bz-deb-installer.c`) and presents the dialog over the
+main window. `get_or_create_window ()` is upstream's (declared at the top
+of `bz-application.c`).
+
+**If the anchor is gone:** put the same check wherever upstream now decides
+how to open a local file (search for `bz_backend_load_local_package` or
+`.metainfo.xml`), before the Flatpak bundle path.
+
+---
+
+## H15: `data/io.github.kolunmi.Bazaar.desktop.in`, `data/meson.build`: handle .deb files by default
+
+**Why:** file managers offer an app for a file type only if its desktop
+file lists the MIME type, and open it on double click only if it is the
+default. On BlankOn (and Debian's GNOME), `/usr/share/applications/gnome-mimeapps.list`
+(package `gnome-session-common`) makes GNOME Software's
+`gnome-software-local-file-packagekit.desktop` the default for `.deb`.
+
+**Change 1, MIME types.** Anchor: the desktop file's `MimeType=` line,
+which ends in `application/x-freedesktop-appstream-component;`. Append:
+
+```text
+application/vnd.debian.binary-package;application/x-deb;
+```
+
+(`application/x-deb` is the older alias; shared-mime-info maps it to the
+first.)
+
+**Change 2, default handler.** Anchor: the end of H11's `install_data (…)`
+in `data/meson.build`. Insert after it:
+
+```meson
+# DOWNSTREAM PATCH (APT system updates): open .deb files with the package
+# installer by default, see ai-patches/DIFF.md H15
+install_data('bazaar-deb-mimeapps.list',
+  rename: 'gnome-mimeapps.list',
+  install_dir: get_option('sysconfdir') / 'xdg'
+)
+```
+
+**Connection:** `patches/data/bazaar-deb-mimeapps.list`. Under the
+freedesktop.org MIME applications spec, `$XDG_CONFIG_DIRS/gnome-mimeapps.list`
+(`/etc/xdg/…`) is read before `$XDG_DATA_DIRS/applications/gnome-mimeapps.list`
+(`/usr/share/…`), so it overrides GNOME Software for these two types only.
+A user's own choice in `~/.config/mimeapps.list` still wins. It applies
+where `XDG_CURRENT_DESKTOP` contains `GNOME` (BlankOn's Praya session
+does); other desktops keep their own default and offer the app under
+"Open With". Checked with `gio mime application/vnd.debian.binary-package`
+(TEST.md D2).
+
+**If the anchor is gone:** H11 missing means the notifications were dropped;
+install the file from any `meson.build` under `data/`. If a package
+(`gnome-session-common`, a distribution settings package) starts shipping
+`/etc/xdg/gnome-mimeapps.list`, the two packages conflict: move the two
+lines into that file instead and drop change 2.
+
+---
+
 ## R: rebrand to Warsi (script, no diff)
 
 **Why:** the user decided on 2026-11-15 to ship the patched Bazaar as Warsi
 (`id.blankonlinux.warsi`). See PLAN.md §10.
 
-**Change:** not a diff. After H1–H12, from the repository root:
+**Change:** not a diff. After H1–H15, from the repository root:
 
 ```bash
 python3 ai-patches/patches/rebrand/rebrand.py
@@ -556,7 +686,7 @@ APT hooks use (H8's `gsettings get`, H10's schema, H11's autostart file).
 
 ## Full unified diff (for `git apply`)
 
-This is the exact `git diff` of the twelve files of hooks H1–H11 and H13 against
+This is the exact `git diff` of the thirteen files of hooks H1–H11 and H13–H15 against
 the base commit (H12 is the script above). It is
 the only `diff`-fenced block in this file, so it can be extracted and applied
 mechanically:
@@ -565,7 +695,7 @@ mechanically:
 awk '/^```diff$/{f=1;next} /^```$/{f=0} f' ai-patches/DIFF.md > /tmp/apt-hooks.diff && git apply --3way /tmp/apt-hooks.diff
 ```
 
-If `git apply` fails, apply hooks H1–H6 by hand as described above. The
+If `git apply` fails, apply the hooks by hand as described above. The
 diff does **not** include the new files; copy those from `patches/src/`
 (PLAN.md §5.2).
 
@@ -586,6 +716,19 @@ index c7ee7da1..1c005d1f 100644
    ],
    "cleanup": [
      "/share/zsh",
+diff --git a/data/io.github.kolunmi.Bazaar.desktop.in b/data/io.github.kolunmi.Bazaar.desktop.in
+index 2ce60419..626ebbfa 100644
+--- a/data/io.github.kolunmi.Bazaar.desktop.in
++++ b/data/io.github.kolunmi.Bazaar.desktop.in
+@@ -10,7 +10,7 @@ Type=Application
+ Categories=GTK;Utility;
+ Keywords=System;Package;Manager;Discover;Flatpak;Software;App;Store;
+ StartupNotify=true
+-MimeType=x-scheme-handler/appstream;x-scheme-handler/flatpak;x-scheme-handler/flatpak+https;application/vnd.flatpak;application/vnd.flatpak.ref;application/x-freedesktop-appstream-component;
++MimeType=x-scheme-handler/appstream;x-scheme-handler/flatpak;x-scheme-handler/flatpak+https;application/vnd.flatpak;application/vnd.flatpak.ref;application/x-freedesktop-appstream-component;application/vnd.debian.binary-package;application/x-deb;
+ Actions=new-window;
+ X-Purism-FormFactor=Workstation;Mobile;
+ 
 diff --git a/data/io.github.kolunmi.Bazaar.gschema.xml b/data/io.github.kolunmi.Bazaar.gschema.xml
 index 62860bad..cf8ab2b6 100644
 --- a/data/io.github.kolunmi.Bazaar.gschema.xml
@@ -607,10 +750,10 @@ index 62860bad..cf8ab2b6 100644
    </schema>
  </schemalist>
 diff --git a/data/meson.build b/data/meson.build
-index 315bef7f..164c3011 100644
+index 315bef7f..aa6615dc 100644
 --- a/data/meson.build
 +++ b/data/meson.build
-@@ -51,5 +51,13 @@ configure_file(
+@@ -51,5 +51,20 @@ configure_file(
    install_dir: get_option('datadir') / 'gnome-shell' / 'search-providers'
  )
  
@@ -622,13 +765,20 @@ index 315bef7f..164c3011 100644
 +  install_dir: get_option('sysconfdir') / 'xdg' / 'autostart'
 +)
 +
++# DOWNSTREAM PATCH (APT system updates): open .deb files with the package
++# installer by default, see ai-patches/DIFF.md H15
++install_data('bazaar-deb-mimeapps.list',
++  rename: 'gnome-mimeapps.list',
++  install_dir: get_option('sysconfdir') / 'xdg'
++)
++
  subdir('icons')
  subdir('dbus')
 diff --git a/po/POTFILES.in b/po/POTFILES.in
-index 85f4751c..ab8ed999 100644
+index 85f4751c..a700b854 100644
 --- a/po/POTFILES.in
 +++ b/po/POTFILES.in
-@@ -19,6 +19,11 @@ src/bz-application-map-factory.c
+@@ -19,6 +19,14 @@ src/bz-application-map-factory.c
  src/bz-application.c
  src/bz-apps-page.blp
  src/bz-apps-page.c
@@ -637,6 +787,9 @@ index 85f4751c..ab8ed999 100644
 +src/bz-apt-updates-card.blp
 +src/bz-apt-updates-card.c
 +src/bz-update-notifier.c
++src/bz-deb-installer.c
++src/bz-deb-install-dialog.blp
++src/bz-deb-install-dialog.c
  src/bz-appstream-parser.c
  src/bz-article-list-view.c
  src/bz-article-tile.blp
@@ -688,32 +841,34 @@ index 7c860b80..da2c2ae5 100644
    sd_event_exit (event, 0);
    return 0;
 diff --git a/src/bazaar.gresource.xml b/src/bazaar.gresource.xml
-index 69589645..12390c65 100644
+index 69589645..15689cb0 100644
 --- a/src/bazaar.gresource.xml
 +++ b/src/bazaar.gresource.xml
-@@ -26,6 +26,8 @@
+@@ -26,6 +26,9 @@
      <file preprocess="xml-stripblanks">bz-app-size-dialog.ui</file>
      <file preprocess="xml-stripblanks">bz-app-tile.ui</file>
      <file preprocess="xml-stripblanks">bz-apps-page.ui</file>
 +    <!-- DOWNSTREAM PATCH (APT system updates) -->
 +    <file preprocess="xml-stripblanks">bz-apt-updates-card.ui</file>
++    <file preprocess="xml-stripblanks">bz-deb-install-dialog.ui</file>
      <file preprocess="xml-stripblanks">bz-appstream-description-render.ui</file>
      <file preprocess="xml-stripblanks">bz-article.ui</file>
      <file preprocess="xml-stripblanks">bz-article-tile.ui</file>
 diff --git a/src/bz-application.c b/src/bz-application.c
-index dc185979..84f497d4 100644
+index dc185979..8e866ab1 100644
 --- a/src/bz-application.c
 +++ b/src/bz-application.c
-@@ -35,6 +35,8 @@
+@@ -35,6 +35,9 @@
  
  #include "bz-application-map-factory.h"
  #include "bz-application.h"
 +/* DOWNSTREAM PATCH (APT system updates): see ai-patches/DIFF.md */
 +#include "bz-update-notifier.h"
++#include "bz-deb-install-dialog.h"
  #include "bz-appstream-parser.h"
  #include "bz-auth-state.h"
  #include <bzvala.h>
-@@ -1069,6 +1071,9 @@ bz_application_init (BzApplication *self)
+@@ -1069,6 +1072,9 @@ bz_application_init (BzApplication *self)
        app_actions,
        G_N_ELEMENTS (app_actions),
        self);
@@ -723,6 +878,22 @@ index dc185979..84f497d4 100644
    gtk_application_set_accels_for_action (
        GTK_APPLICATION (self),
        "app.quit",
+@@ -4125,6 +4131,15 @@ open_location_take (BzApplication *self,
+                     const char    *name_for_suffix_check,
+                     GFile         *file)
+ {
++  /* DOWNSTREAM PATCH (APT system updates): .deb files open the package
++   * installer, see ai-patches/DIFF.md H14 */
++  if (bz_deb_install_dialog_handles (name_for_suffix_check))
++    {
++      bz_deb_install_dialog_open (file, GTK_WIDGET (get_or_create_window (self)));
++      g_object_unref (file);
++      return;
++    }
++
+   if (name_for_suffix_check != NULL &&
+       (g_str_has_suffix (name_for_suffix_check, ".metainfo.xml") ||
+        g_str_has_suffix (name_for_suffix_check, ".appdata.xml")))
 diff --git a/src/bz-library-page.blp b/src/bz-library-page.blp
 index 92475aea..2d27602c 100644
 --- a/src/bz-library-page.blp
@@ -773,56 +944,8 @@ index 904e6e49..01ace80d 100644
  
    gtk_widget_class_set_template_from_resource (widget_class, "/io/github/kolunmi/Bazaar/bz-library-page.ui");
    bz_widget_class_bind_all_util_callbacks (widget_class);
-diff --git a/src/meson.build b/src/meson.build
-index 7cbd7f24..d971af49 100644
---- a/src/meson.build
-+++ b/src/meson.build
-@@ -67,6 +67,11 @@ bz_sources = files(
-   'bz-application-map-factory.c',
-   'bz-application.c',
-   'bz-apps-page.c',
-+  # DOWNSTREAM PATCH (APT system updates): see ai-patches/DIFF.md
-+  'bz-apt-updates.c',
-+  'bz-apt-updates-card.c',
-+  # DOWNSTREAM PATCH (APT system updates): notifications
-+  'bz-update-notifier.c',
-   'bz-appstream-description-render.c',
-   'bz-appstream-parser.c',
-   'bz-article-list-view.c',
-@@ -201,6 +206,8 @@ blueprints = custom_target('blueprints',
-     'bz-app-size-dialog.blp',
-     'bz-app-tile.blp',
-     'bz-apps-page.blp',
-+    # DOWNSTREAM PATCH (APT system updates)
-+    'bz-apt-updates-card.blp',
-     'bz-appstream-description-render.blp',
-     'bz-article.blp',
-     'bz-article-tile.blp',
-diff --git a/src/update-worker.c b/src/update-worker.c
-index b8c798c1..0788843c 100644
---- a/src/update-worker.c
-+++ b/src/update-worker.c
-@@ -30,6 +30,8 @@
- #include <bzvala.h>
- #include "bz-flatpak-private.h"
- #include "update-worker.h"
-+/* DOWNSTREAM PATCH (APT system updates): see ai-patches/DIFF.md */
-+#include "bz-update-notifier.h"
- 
- #define DAILY_WINDOW_START_HOUR    6
- #define DAILY_WINDOW_SPREAD_HOURS  6
-@@ -78,6 +80,10 @@ run_update_worker (int   argc,
-   auto_update               = g_settings_get_boolean (settings, "auto-update");
-   auto_update_notifications = g_settings_get_boolean (settings, "auto-update-notifications");
- 
-+  /* DOWNSTREAM PATCH (APT system updates): "updates available" notification
-+   * for APT, and for Flatpak when upstream does not auto-update it */
-+  bz_update_notifier_run (settings, auto_update);
-+
-   if (!auto_update)
-     {
-       g_debug ("Skipping update check: auto-update is disabled\n");
 diff --git a/src/main.c b/src/main.c
+index 34ec8372..3cfaafef 100644
 --- a/src/main.c
 +++ b/src/main.c
 @@ -26,10 +26,82 @@
@@ -908,7 +1031,7 @@ diff --git a/src/main.c b/src/main.c
  int
  main (int   argc,
        char *argv[])
-@@ -56,6 +128,10 @@
+@@ -56,6 +128,10 @@ main (int   argc,
      {
        g_autoptr (BzApplication) app = NULL;
  
@@ -919,4 +1042,57 @@ diff --git a/src/main.c b/src/main.c
        /* Init Bazaar GTK Extensions (see ../bge/) */
        bge_init ();
  
+diff --git a/src/meson.build b/src/meson.build
+index 7cbd7f24..87a17bd9 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -67,6 +67,14 @@ bz_sources = files(
+   'bz-application-map-factory.c',
+   'bz-application.c',
+   'bz-apps-page.c',
++  # DOWNSTREAM PATCH (APT system updates): see ai-patches/DIFF.md
++  'bz-apt-updates.c',
++  'bz-apt-updates-card.c',
++  # DOWNSTREAM PATCH (APT system updates): notifications
++  'bz-update-notifier.c',
++  # DOWNSTREAM PATCH (APT system updates): .deb file installer
++  'bz-deb-installer.c',
++  'bz-deb-install-dialog.c',
+   'bz-appstream-description-render.c',
+   'bz-appstream-parser.c',
+   'bz-article-list-view.c',
+@@ -201,6 +209,9 @@ blueprints = custom_target('blueprints',
+     'bz-app-size-dialog.blp',
+     'bz-app-tile.blp',
+     'bz-apps-page.blp',
++    # DOWNSTREAM PATCH (APT system updates)
++    'bz-apt-updates-card.blp',
++    'bz-deb-install-dialog.blp',
+     'bz-appstream-description-render.blp',
+     'bz-article.blp',
+     'bz-article-tile.blp',
+diff --git a/src/update-worker.c b/src/update-worker.c
+index b8c798c1..0788843c 100644
+--- a/src/update-worker.c
++++ b/src/update-worker.c
+@@ -30,6 +30,8 @@
+ #include <bzvala.h>
+ #include "bz-flatpak-private.h"
+ #include "update-worker.h"
++/* DOWNSTREAM PATCH (APT system updates): see ai-patches/DIFF.md */
++#include "bz-update-notifier.h"
+ 
+ #define DAILY_WINDOW_START_HOUR    6
+ #define DAILY_WINDOW_SPREAD_HOURS  6
+@@ -78,6 +80,10 @@ run_update_worker (int   argc,
+   auto_update               = g_settings_get_boolean (settings, "auto-update");
+   auto_update_notifications = g_settings_get_boolean (settings, "auto-update-notifications");
+ 
++  /* DOWNSTREAM PATCH (APT system updates): "updates available" notification
++   * for APT, and for Flatpak when upstream does not auto-update it */
++  bz_update_notifier_run (settings, auto_update);
++
+   if (!auto_update)
+     {
+       g_debug ("Skipping update check: auto-update is disabled\n");
 ```

@@ -56,7 +56,7 @@ sudo apt install python3-gi gir1.2-packagekitglib-1.0
 - Quit any running Bazaar before T6/T10 (`flatpak kill io.github.kolunmi.Bazaar`):
   it owns the application ID and would receive the window instead of the build.
 
-## 1. Run the automated tests (T1–T7)
+## 1. Run the automated tests (T1–T7, D1)
 
 From the repository root:
 
@@ -75,6 +75,7 @@ PASS  T3  full warsi build, no patch warnings
 PASS  R1  Warsi rebrand complete and installs cleanly
 PASS  T4  card counts match PackageKit and apt
 PASS  T5  harness screenshots
+PASS  D1  .deb installer reads packages (simulated, installs nothing)
 PASS  T6  real warsi app: Library page (and About) screenshots
 PASS  T7  update worker sends the updates-available notification
 Screenshots: <repo>/build/apt-tests
@@ -255,6 +256,57 @@ and puts `build/src` on `PATH` (Bazaar re-executes itself by name for its
 refresh worker). See [Troubleshooting](#troubleshooting) for what did not
 work.
 
+After D1 has run, T6 also screenshots the **.deb install dialog** for D1's
+generated app package (`build/apt-tests/app-deb-install.png`). Any file can
+be opened the same way:
+
+```bash
+APP_SHOT_OPEN=/path/to/package.deb ai-patches/patches/harness/app-shot.sh build/apt-tests/app-deb.png 15
+```
+
+Expected: the app's name and icon from the package, an **Install** button,
+the "Only install packages you trust" row, Details. If another Warsi is
+running in the session (an installed one), run the script under
+`dbus-run-session -- …` so the build gets its own session bus.
+
+### D1: .deb installer
+
+```bash
+ai-patches/patches/harness/deb-check.sh
+```
+
+Compiles `src/bz-deb-installer.c` with a small driver (`deb-check.c`, no
+GTK) and runs it on packages it generates with `dpkg-deb` in
+`build/apt-tests/deb/`:
+
+| Case | Expected |
+|---|---|
+| new package with a launcher and SVG icon | `state=ready action=install`, app name and icon from the package |
+| depends on a package that does not exist | `state=blocked`, "Other packages it needs are missing …" |
+| `base-files` at the installed version | `state=ready action=none` (nothing to install) |
+| `base-files` version 99999 | `state=ready action=upgrade` |
+| a text file named `.deb` | `state=failed`, "The file is damaged …" |
+| a file that does not exist | `state=failed` |
+
+PackageKit reads the files and **simulates** installing them; nothing is
+installed. run-tests.sh also checks that the desktop file lists
+`application/vnd.debian.binary-package` and that
+`data/bazaar-deb-mimeapps.list` names the app.
+
+### D2: default handler (installed package)
+
+```bash
+gio mime application/vnd.debian.binary-package
+```
+
+Expected first line: the default application is `id.blankonlinux.warsi.desktop`
+(`io.github.kolunmi.Bazaar.desktop` un-rebranded). If it still names
+`gnome-software-local-file-packagekit.desktop`, check that
+`/etc/xdg/gnome-mimeapps.list` is installed, that `XDG_CURRENT_DESKTOP`
+contains `GNOME`, and that `~/.config/mimeapps.list` does not set another
+default. Without installing, point `XDG_CONFIG_DIRS` and `XDG_DATA_DIRS` at
+the build's files (DIFF.md H15).
+
 ### T7: notification (opt-in)
 
 ```bash
@@ -369,8 +421,13 @@ Run Bazaar as in T10, open **Library** (Ctrl+D).
 | Daemon stays | installed package, log in, wait 10 s, `pgrep -a bazaar-daemon` | daemon running (`journalctl --user` / its log says "update notifications are on so staying alive") |
 | Warsi next to Bazaar | Warsi installed, and Flathub's Bazaar running | both run at once as separate apps (own windows, own GNOME notification settings); a Warsi notification click opens Warsi |
 | Warsi in GNOME | installed Warsi: search "Warsi" in Activities; Settings → Apps | the Warsi icon and name; GNOME Shell search shows Flatpak results from Warsi |
+| D3 ⚠️ Install a .deb | double-click a downloaded `.deb` in Files (e.g. D1's `build/apt-tests/deb/bz-deb-check-app_1.0_all.deb`), **Install** | dialog as in T6; polkit prompt; progress; "Installed" and **Open**; `dpkg -s` shows the package. Remove it afterwards with `sudo apt remove bz-deb-check-app` |
+| .deb: auth refused | **Install**, dismiss the polkit dialog | back to **Install**, no error |
+| .deb: cancel | **Install**, then **Cancel** while it downloads dependencies | back to **Install**, no error; the dialog could not be closed meanwhile |
+| .deb: already installed | open the same file again after D3 | "This version is installed" and **Open** |
+| .deb: network share | open a `.deb` on an SMB/SFTP share mounted in Files | works (copied to `~/.cache/warsi/deb-staging/` first) |
 
-⚠️ **Offline update** and **Live update** really upgrade the machine, including
+⚠️ **Offline update**, **Live update** and **D3** really change the machine, including
 the removals the card lists. Only run them on a machine where that is wanted,
 and when the person who owns it agrees.
 

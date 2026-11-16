@@ -1,0 +1,307 @@
+// DOWNSTREAM PATCH (APT system updates): .deb file installer, see ai-patches/PLAN.md §12
+using Gtk 4.0;
+using Adw 1;
+
+template $BzDebInstallDialog: Adw.Dialog {
+  title: _("Install Package");
+  content-width: 560;
+  content-height: 680;
+  width-request: 360;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: ScrolledWindow {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+
+      child: Adw.Clamp {
+        maximum-size: 520;
+
+        child: Box {
+          orientation: vertical;
+          spacing: 18;
+          margin-top: 12;
+          margin-bottom: 24;
+          margin-start: 18;
+          margin-end: 18;
+
+          Box {
+            orientation: vertical;
+            spacing: 6;
+            halign: center;
+
+            Image icon_image {
+              icon-name: "package-x-generic";
+              pixel-size: 96;
+              margin-bottom: 6;
+
+              styles [
+                "icon-dropshadow",
+              ]
+            }
+
+            Label title_label {
+              wrap: true;
+              wrap-mode: word_char;
+              justify: center;
+
+              styles [
+                "title-1",
+              ]
+            }
+
+            Label summary_label {
+              wrap: true;
+              wrap-mode: word_char;
+              justify: center;
+              visible: false;
+
+              styles [
+                "dimmed",
+              ]
+            }
+          }
+
+          Box {
+            orientation: vertical;
+            spacing: 6;
+            halign: center;
+
+            Adw.Spinner spinner {
+              width-request: 32;
+              height-request: 32;
+            }
+
+            Button action_button {
+              visible: false;
+              halign: center;
+              clicked => $action_cb(template);
+
+              styles [
+                "suggested-action",
+                "pill",
+              ]
+            }
+
+            Label state_label {
+              wrap: true;
+              justify: center;
+              visible: false;
+
+              styles [
+                "dimmed",
+              ]
+            }
+          }
+
+          Box progress_box {
+            orientation: vertical;
+            spacing: 6;
+            visible: false;
+
+            ProgressBar progress_bar {}
+
+            Box {
+              spacing: 12;
+
+              Label status_label {
+                hexpand: true;
+                xalign: 0;
+                ellipsize: end;
+
+                styles [
+                  "dimmed",
+                ]
+              }
+
+              Button cancel_button {
+                label: _("Cancel");
+                clicked => $cancel_cb(template);
+              }
+            }
+          }
+
+          ListBox message_list {
+            selection-mode: none;
+            visible: false;
+
+            styles [
+              "boxed-list",
+            ]
+
+            Adw.ActionRow error_row {
+              use-markup: false;
+              subtitle-selectable: true;
+              visible: false;
+
+              [prefix]
+              Image {
+                icon-name: "dialog-error-symbolic";
+
+                styles [
+                  "error",
+                ]
+              }
+            }
+
+            Adw.ExpanderRow error_details_row {
+              title: _("Technical Details");
+              visible: false;
+
+              Label error_details_label {
+                wrap: true;
+                wrap-mode: word_char;
+                xalign: 0;
+                selectable: true;
+                margin-top: 12;
+                margin-bottom: 12;
+                margin-start: 12;
+                margin-end: 12;
+
+                styles [
+                  "monospace",
+                  "caption",
+                ]
+              }
+            }
+
+            Adw.ActionRow restart_row {
+              title: _("Restart Required");
+              subtitle: _("Restart the computer to finish the installation.");
+              visible: false;
+
+              [suffix]
+              Button {
+                label: _("Restart Now");
+                valign: center;
+                clicked => $restart_cb(template);
+              }
+            }
+
+            Adw.ActionRow trust_row {
+              title: _("Only install packages you trust");
+              subtitle: _("This package does not come from your system's software sources, so its origin cannot be checked. It can change any part of the system.");
+              visible: false;
+
+              [prefix]
+              Image {
+                icon-name: "dialog-warning-symbolic";
+
+                styles [
+                  "warning",
+                ]
+              }
+            }
+          }
+
+          Adw.PreferencesGroup details_group {
+            title: _("Details");
+            visible: false;
+
+            Adw.ActionRow package_row {
+              title: _("Package");
+              use-markup: false;
+              subtitle-selectable: true;
+
+              styles [
+                "property",
+              ]
+            }
+
+            Adw.ActionRow version_row {
+              title: _("Version");
+              use-markup: false;
+              subtitle-selectable: true;
+
+              styles [
+                "property",
+              ]
+            }
+
+            Adw.ActionRow installed_row {
+              title: _("Installed Version");
+              use-markup: false;
+              subtitle-selectable: true;
+              visible: false;
+
+              styles [
+                "property",
+              ]
+            }
+
+            Adw.ActionRow size_row {
+              title: _("Installed Size");
+              use-markup: false;
+              visible: false;
+
+              styles [
+                "property",
+              ]
+            }
+
+            Adw.ActionRow license_row {
+              title: _("License");
+              use-markup: false;
+              subtitle-selectable: true;
+              visible: false;
+
+              styles [
+                "property",
+              ]
+            }
+
+            Adw.ActionRow website_row {
+              title: _("Website");
+              use-markup: false;
+              activatable: true;
+              visible: false;
+              activated => $website_cb(template);
+
+              styles [
+                "property",
+              ]
+
+              [suffix]
+              Image {
+                icon-name: "adw-external-link-symbolic";
+              }
+            }
+
+            Adw.ExpanderRow extra_row {
+              use-markup: false;
+              visible: false;
+            }
+
+            Adw.ExpanderRow removed_row {
+              use-markup: false;
+              visible: false;
+
+              [prefix]
+              Image {
+                icon-name: "user-trash-symbolic";
+
+                styles [
+                  "error",
+                ]
+              }
+            }
+          }
+
+          Adw.PreferencesGroup description_group {
+            title: _("Description");
+            visible: false;
+
+            Label description_label {
+              wrap: true;
+              wrap-mode: word_char;
+              xalign: 0;
+              selectable: true;
+            }
+          }
+        };
+      };
+    };
+  };
+}
