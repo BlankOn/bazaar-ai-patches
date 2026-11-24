@@ -28,7 +28,7 @@ gcc -std=gnu11 -Wall -Wextra -Werror -Wno-unused-parameter \
     -o ext-check "$SRC/bz-gnome-extensions.c" "$HERE/ext-check.c" \
     $(pkg-config --libs gtk4 libsoup-3.0 json-glib-1.0)
 
-# The fake Shell owns org.gnome.Shell.Extensions on the private bus only.
+# The fake Shell owns org.gnome.Shell on the private bus only.
 LANGUAGE=C dbus-run-session -- sh -c "
   python3 -I '$HERE/fake-shell-extensions.py' 2>'$OUT/fake-shell.log' &
   for i in 1 2 3 4 5 6 7 8 9 10; do grep -q ready '$OUT/fake-shell.log' 2>/dev/null && break; sleep 0.5; done

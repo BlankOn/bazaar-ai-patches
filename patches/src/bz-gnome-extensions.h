@@ -22,9 +22,9 @@
  *
  * BzGnomeExtensions browses extensions.gnome.org (its JSON query API) and
  * manages the user's GNOME Shell extensions through GNOME Shell's own D-Bus
- * service, org.gnome.Shell.Extensions: Shell downloads, verifies and asks
- * before installing (InstallRemoteExtension), so no extension file ever
- * passes through this code. Only libsoup, json-glib, GIO and GDK (for the
+ * interface (org.gnome.Shell.Extensions on org.gnome.Shell): Shell
+ * downloads, verifies and asks before installing (InstallRemoteExtension),
+ * so no extension file ever passes through this code. Only libsoup, json-glib, GIO and GDK (for the
  * icon textures); no other Bazaar code, so a test program can use it.
  *
  * BzGnomeExtension is one extension: what extensions.gnome.org says about

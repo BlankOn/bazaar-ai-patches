@@ -123,7 +123,7 @@ grep -h -B3 -E "adw_alert_dialog_choose|adw_preferences_row_set_use_markup|adw_a
 In a GNOME session (read-only calls):
 
 ```bash
-gdbus introspect --session --dest org.gnome.Shell.Extensions --object-path /org/gnome/Shell/Extensions | grep -E "ListExtensions|InstallRemoteExtension|UninstallExtension|EnableExtension|DisableExtension|OpenExtensionPrefs|ExtensionStateChanged|ShellVersion|UserExtensionsEnabled" | wc -l
+gdbus introspect --session --dest org.gnome.Shell --object-path /org/gnome/Shell | sed -n '/interface org.gnome.Shell.Extensions {/,/^  };/p' | grep -E "ListExtensions|InstallRemoteExtension|UninstallExtension|EnableExtension|DisableExtension|OpenExtensionPrefs|ExtensionStateChanged|ShellVersion|UserExtensionsEnabled" | wc -l
 ```
 
 Expected: `9` (each name once, with the signatures listed in §3.8).
@@ -426,10 +426,13 @@ dependencies, `libsoup_dep` and `json_glib_dep` in `src/meson.build`).
 
 ### 3.8 GNOME Shell extensions D-Bus API (session bus)
 
-Service `org.gnome.Shell.Extensions`, object `/org/gnome/Shell/Extensions`,
-interface `org.gnome.Shell.Extensions` (GNOME Shell's
-`js/ui/shellDBus.js`; the same one `gnome-extensions` and the Extensions app
-use). Checked on GNOME Shell 50.4. Used by `bz-gnome-extensions.c`:
+Service `org.gnome.Shell`, object `/org/gnome/Shell`, interface
+`org.gnome.Shell.Extensions` (GNOME Shell's `js/ui/shellDBus.js`; the same
+one `gnome-extensions` and the Extensions app use). Not the bus name
+`org.gnome.Shell.Extensions`: that is the Extensions app
+(`/usr/share/dbus-1/services/org.gnome.Shell.Extensions.service`), which is
+only D-Bus activated, so waiting for it without auto-start never sees it
+(the bug in snapshot b70cacdf, where the tab stayed hidden). Checked on GNOME Shell 50.4. Used by `bz-gnome-extensions.c`:
 
 | Member | Signature | Use |
 |---|---|---|

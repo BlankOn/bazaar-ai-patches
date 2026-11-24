@@ -315,8 +315,8 @@ ai-patches/patches/harness/ext-check.sh
 
 Compiles `src/bz-gnome-extensions.c` with a driver (`ext-check.c`) and runs
 it on a private session bus (`dbus-run-session`) where
-`fake-shell-extensions.py` plays GNOME Shell's
-`org.gnome.Shell.Extensions` service, starting with three "installed"
+`fake-shell-extensions.py` plays GNOME Shell (bus name `org.gnome.Shell`,
+interface `org.gnome.Shell.Extensions`), starting with three "installed"
 extensions: Dash to Dock (enabled), Caffeine (disabled) and a system
 extension in error. Queries the **real** extensions.gnome.org. 21 checks:
 Shell found and version read; Popular's first page (24) and its second

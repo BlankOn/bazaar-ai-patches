@@ -29,7 +29,10 @@
  *   GET /extension-info/?uuid=UUID   -> one such object (404 if unknown)
  *   Icons and screenshots are paths on the same host.
  *
- * GNOME Shell, org.gnome.Shell.Extensions on the session bus:
+ * GNOME Shell: interface org.gnome.Shell.Extensions on bus name
+ * org.gnome.Shell, object /org/gnome/Shell. (The bus name
+ * org.gnome.Shell.Extensions is the Extensions app, which only runs on
+ * demand, so it is not used.)
  *   ListExtensions, InstallRemoteExtension (Shell downloads the zip for its
  *   own version from extensions.gnome.org and asks the user first),
  *   EnableExtension, DisableExtension, UninstallExtension,
@@ -49,8 +52,8 @@
 
 #define EGO_HOST       "https://extensions.gnome.org"
 #define EGO_PER_PAGE   24
-#define SHELL_NAME     "org.gnome.Shell.Extensions"
-#define SHELL_PATH     "/org/gnome/Shell/Extensions"
+#define SHELL_NAME     "org.gnome.Shell"
+#define SHELL_PATH     "/org/gnome/Shell"
 #define SHELL_IFACE    "org.gnome.Shell.Extensions"
 #define DEFAULT_ICON   "/static/images/plugin.png"
 #define TYPE_PER_USER  2

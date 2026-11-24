@@ -64,8 +64,8 @@ t1_static () {
            src/bz-gnome-extension-dialog.h src/bz-gnome-extension-dialog.c src/bz-gnome-extension-dialog.blp; do
     grep -q "DOWNSTREAM PATCH (GNOME Extensions)" "$f" || { echo "MISSING GNOME EXTENSIONS MARKER: $f"; ok=1; }
   done
-  grep -q -- "--talk-name=org.gnome.Shell.Extensions" build-aux/flatpak/io.github.kolunmi.Bazaar.json ||
-    { echo "MISSING: org.gnome.Shell.Extensions in the Flatpak manifest"; ok=1; }
+  grep -q -- "--talk-name=org.gnome.Shell\""  build-aux/flatpak/io.github.kolunmi.Bazaar.json ||
+    { echo "MISSING: org.gnome.Shell in the Flatpak manifest"; ok=1; }
   if [ $REBRANDED = 1 ]; then
     for f in src/bz-rebrand.h src/bz-rebrand.c src/bz-application.c src/meson.build; do
       grep -q "DOWNSTREAM PATCH (Warsi rebrand)" "$f" || { echo "MISSING REBRAND MARKER: $f"; ok=1; }

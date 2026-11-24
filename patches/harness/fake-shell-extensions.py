@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # DOWNSTREAM PATCH (GNOME Extensions): a stand-in for GNOME Shell's
-# org.gnome.Shell.Extensions D-Bus service, for tests on a private session
-# bus (dbus-run-session). See ai-patches/TEST.md E1 and E2.
+# org.gnome.Shell.Extensions interface (bus name org.gnome.Shell, object
+# /org/gnome/Shell), for tests on a private session bus (dbus-run-session).
+# See ai-patches/TEST.md E1 and E2.
 #
 # It installs, enables and removes nothing on the computer: it only keeps a
 # list in memory and answers like GNOME Shell does (ExtensionStateChanged
@@ -41,7 +42,7 @@ XML = """
 </node>
 """
 
-PATH = "/org/gnome/Shell/Extensions"
+PATH = "/org/gnome/Shell"
 IFACE = "org.gnome.Shell.Extensions"
 ACTIVE, INACTIVE, ERROR, UNINSTALLED = 1, 2, 3, 99
 SYSTEM, PER_USER = 1, 2
@@ -167,6 +168,6 @@ def on_lost(conn, name):
     sys.exit(1)
 
 
-Gio.bus_own_name(Gio.BusType.SESSION, "org.gnome.Shell.Extensions",
+Gio.bus_own_name(Gio.BusType.SESSION, "org.gnome.Shell",
                  Gio.BusNameOwnerFlags.NONE, on_bus, on_name, on_lost)
 GLib.MainLoop().run()

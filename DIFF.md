@@ -54,11 +54,11 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
  src/meson.build ─────────(H1)──► compiles  src/bz-gnome-extensions.c, src/bz-gnome-extensions-page.{c,blp},
                                              src/bz-gnome-extension-dialog.{c,blp}
  src/bazaar.gresource.xml ─(H2)──► embeds    bz-gnome-extensions-page.ui, bz-gnome-extension-dialog.ui
- build-aux/flatpak/…json ─(H6)──► --talk-name=org.gnome.Shell.Extensions
+ build-aux/flatpak/…json ─(H6)──► --talk-name=org.gnome.Shell
  src/bz-window.c ────────(H16)──► g_type_ensure (BZ_TYPE_GNOME_EXTENSIONS_PAGE)
  src/bz-window.blp ──────(H17)──► Adw.ViewStackPage "gnome-extensions" → $BzGnomeExtensionsPage
                                        └─► BzGnomeExtensions (bz-gnome-extensions.c):
-                                           extensions.gnome.org + org.gnome.Shell.Extensions
+                                           extensions.gnome.org + org.gnome.Shell (its .Extensions interface)
 ```
 
 | Hook | Upstream file | New file / symbol it connects to |
@@ -336,7 +336,7 @@ base commit is `"--system-talk-name=org.freedesktop.Accounts"`. Append
     "--system-talk-name=org.freedesktop.PackageKit",
     "--system-talk-name=org.freedesktop.login1",
     "--talk-name=org.gnome.SessionManager",
-    "--talk-name=org.gnome.Shell.Extensions"
+    "--talk-name=org.gnome.Shell"
 ```
 
 (The last line is for the GNOME Extensions tab, `bz-gnome-extensions.c`.
@@ -757,7 +757,8 @@ Insert after it:
 
 **Connection:** `BzGnomeExtensionsPage` (`patches/src/bz-gnome-extensions-page.c`)
 creates its own `BzGnomeExtensions` model; `available` follows GNOME
-Shell's `org.gnome.Shell.Extensions` on the session bus, so the tab hides
+Shell (bus name `org.gnome.Shell`, interface `org.gnome.Shell.Extensions`)
+on the session bus, so the tab hides
 itself outside GNOME Shell. It needs nothing from `BzStateInfo`.
 
 **If the anchor is gone:** add the page as the last child of whatever
@@ -837,7 +838,7 @@ index c7ee7da1..df9d4b85 100644
 +    "--system-talk-name=org.freedesktop.PackageKit",
 +    "--system-talk-name=org.freedesktop.login1",
 +    "--talk-name=org.gnome.SessionManager",
-+    "--talk-name=org.gnome.Shell.Extensions"
++    "--talk-name=org.gnome.Shell"
    ],
    "cleanup": [
      "/share/zsh",

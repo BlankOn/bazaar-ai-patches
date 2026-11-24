@@ -652,6 +652,7 @@ Append one row per attempt. Never delete rows.
 | 2026-11-15 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `e90c8f37`) | 0.10.1 | ✅ Rebrand to Warsi (`id.blankonlinux.warsi`), step R; `run-tests.sh --notify` with R1 | New: `patches/rebrand/` (`rebrand.py`, `bz-rebrand.{c,h}`, icons, `po/id-rebrand.po`), `patches/harness/brand.sh`; `merge-translations.py` takes fragment arguments; app-shot gains `APP_SHOT_ABOUT`. `rebrand.py --check` clean after one run; installed tree has no Bazaar ID or file name; desktop file and AppStream valid; About dialog shows the note above Bazaar's section (screenshot). 86 translations in 15 languages marked fuzzy (none Indonesian). Uninstalled, T7's notification goes through the portal (no desktop file for the new ID). Not tested: an installed Warsi (notification click, autostart, GNOME search provider). |
 | 2026-11-17 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `1e2931e4`) | 0.10.1 | ✅ .deb file installer (§12), hooks H14–H15; D1 passes; dialog screenshots for new app, older/newer/same version, broken dependencies and damaged file | New: `bz-deb-installer.{c,h}`, `bz-deb-install-dialog.{c,h,blp}`, `patches/data/bazaar-deb-mimeapps.list`, `patches/harness/deb-check.{sh,c}`, `APP_SHOT_OPEN`; 23 Indonesian strings. `gio mime` confirms `/etc/xdg/gnome-mimeapps.list` overrides GNOME Software. DIFF.md's diff applied to a clean base plus `rebrand.py` reproduces the tree. Not tested: a real install (needs the owner's consent), Open after install. |
 | 2026-11-24 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `f19b429b`) | 0.10.1 | ✅ GNOME Extensions tab (§13), hooks H16–H17 (and H1, H2, H5, H6, H12 extended); `run-tests.sh` T1–T6, R1, D1, E1 all PASS (E1: 21 checks against extensions.gnome.org and a fake Shell) | New: `bz-gnome-extensions.{c,h}`, `bz-gnome-extensions-page.{c,h,blp}`, `bz-gnome-extension-dialog.{c,h,blp}`, harness `ext-check.{c,sh}`, `fake-shell-extensions.py`; app-shot gains `APP_SHOT_PAGE`, `APP_SHOT_EXT_*`, `APP_SHOT_WIDTH`. Screenshots: grid, search, Installed view, dialogs (user and system extension), dark, narrow. DIFF.md diff applied to a clean base checkout plus masters, translations and rebrand reproduces the tree. Not tested: installing from the real GNOME Shell (E3). |
+| 2026-11-25 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of `b70cacdf`) | 0.10.1 | ✅ Fix: the Extensions tab never showed in the installed package. The model waited (without auto-start) for the bus name `org.gnome.Shell.Extensions`, which is the Extensions app, only D-Bus activated; GNOME Shell's interface `org.gnome.Shell.Extensions` lives on `org.gnome.Shell`, object `/org/gnome/Shell`. The fake Shell claimed the same wrong name, so E1 passed. Now `org.gnome.Shell` everywhere (model, fake, Flatpak `--talk-name`, docs); `run-tests.sh` all PASS; a read-only check against the real Shell 50.4 sees it and lists the 7 installed extensions. | One T6 run hung on `org.freedesktop.secrets` in the test bus (timed out); the rerun passed. |
 
 
 ## 12. .deb file installer
@@ -830,7 +831,7 @@ New files (masters in `patches/src/`):
   `ExtensionStateChanged` signal keeps every card and dialog current, also
   for changes made elsewhere (the Extensions app, the website).
 - Hooks: H1 (sources), H2 (UI files), H5 (translatable files), H6
-  (Flatpak: `--talk-name=org.gnome.Shell.Extensions`), H12 (Indonesian),
+  (Flatpak: `--talk-name=org.gnome.Shell`), H12 (Indonesian),
   H16 (`bz-window.c` registers the page type), H17 (`bz-window.blp` adds
   the tab). See DIFF.md and API.md §3.8–§3.9.
 
@@ -852,8 +853,8 @@ New files (masters in `patches/src/`):
 
 ### 13.5 Limitations
 
-- Needs GNOME Shell (any desktop without `org.gnome.Shell.Extensions`
-  hides the tab) and network access to extensions.gnome.org.
+- Needs GNOME Shell (any desktop without `org.gnome.Shell` on the session
+  bus hides the tab) and network access to extensions.gnome.org.
 - Extension updates are left to GNOME Shell, which updates them itself at
   login; Warsi does not list them in the Library.
 - No reviews or ratings, no version picker, no "Details" from metadata
