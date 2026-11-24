@@ -610,9 +610,12 @@ packages, which are unchanged. So the two can be installed together without
   installed Bazaar and there is no migration: Warsi starts fresh.
 - 86 translations in 15 languages stay fuzzy until their translators adapt
   "Warsi". Indonesian is complete.
-- The Warsi icon was drawn for this patch: a market stall's awning over a
-  "W", in BlankOn blue. Replace `patches/rebrand/icons/*.svg` with BlankOn's
-  artwork when there is one.
+- The Warsi icon is the owner's artwork (2026-11-24): a market stall, orange
+  awning, blue body with a script "W". `patches/rebrand/icons/app-source.svg`
+  is their Inkscape file (not installed); `app.svg` is it cleaned of editor
+  data; `app-devel.svg` is the same stall in grey; `app-symbolic.svg` is the
+  awning over the "W" in one colour. Edit the source, then regenerate the
+  other three from its paths.
 - The About dialog's "Report an Issue" still points at upstream's tracker,
   as the user asked. Reports about the APT card or notifications belong to
   BlankOn.
