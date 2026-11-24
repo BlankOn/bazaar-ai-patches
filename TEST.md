@@ -28,6 +28,9 @@ The commands below run from the repository root with this directory at
 | T6 | the card renders on the Library page of the **real app** | `run-tests.sh` | no |
 | T7 | the update worker counts Flatpak and APT updates and sends the notification | `run-tests.sh --notify` | posts a notification; sets `last-update-notification` |
 | R1 | (Warsi only) the rebrand is complete: nothing left for `rebrand.py`, no Bazaar ID or file name installed, every Warsi file installed, metadata valid, Indonesian About note, and app search (Praya, GNOME Shell) finds Warsi by "warsi", "warung aplikasi", "store", "software", "gnome software", "bazaar" in English and Indonesian | `run-tests.sh` | no |
+| D1 | the .deb installer reads packages and simulates installing them | `run-tests.sh` | no |
+| E1 | the Extensions tab's model: extensions.gnome.org listing, paging, search, installed view, and every GNOME Shell action (against a fake Shell) | `run-tests.sh` (network needed) | no |
+| E2 | the Extensions tab and its dialog render in the real app (fake Shell) | `run-tests.sh` (part of T6) | no |
 | T8 | screenshots look right, in English and Indonesian | by eye | no |
 | T9 | buttons, error paths and the notification click behave | by hand | ⚠️ two rows upgrade the machine |
 | T10 | run Bazaar and use it | by hand | no (unless you click update) |
@@ -56,7 +59,7 @@ sudo apt install python3-gi gir1.2-packagekitglib-1.0
 - Quit any running Bazaar before T6/T10 (`flatpak kill io.github.kolunmi.Bazaar`):
   it owns the application ID and would receive the window instead of the build.
 
-## 1. Run the automated tests (T1–T7, D1)
+## 1. Run the automated tests (T1–T7, D1, E1)
 
 From the repository root:
 
@@ -304,6 +307,51 @@ installed. run-tests.sh also checks that the desktop file lists
 `application/vnd.debian.binary-package` and that
 `data/bazaar-deb-mimeapps.list` names the app.
 
+### E1: GNOME Extensions model
+
+```bash
+ai-patches/patches/harness/ext-check.sh
+```
+
+Compiles `src/bz-gnome-extensions.c` with a driver (`ext-check.c`) and runs
+it on a private session bus (`dbus-run-session`) where
+`fake-shell-extensions.py` plays GNOME Shell's
+`org.gnome.Shell.Extensions` service, starting with three "installed"
+extensions: Dash to Dock (enabled), Caffeine (disabled) and a system
+extension in error. Queries the **real** extensions.gnome.org. 21 checks:
+Shell found and version read; Popular's first page (24) and its second
+page; Dash to Dock shown enabled and its icon loaded; Caffeine disabled; a
+search finds Clipboard Indicator; a nonsense search is empty; the
+Installed view and its search; enable; remove (and the view drops it); a
+system extension cannot be removed and shows Shell's error; install; turning
+extensions off. The fake prints every call it gets
+(`build/apt-tests/ext/fake-shell.log`). Nothing touches the real GNOME
+Shell or the extensions folder.
+
+### E2: Extensions tab screenshots
+
+Part of T6 (`build/apt-tests/app-extensions.png`,
+`app-extension-dialog.png`). By hand, from the repository root:
+
+```bash
+dbus-run-session -- sh -c 'python3 -I ai-patches/patches/harness/fake-shell-extensions.py & sleep 1; GDK_BACKEND=x11 APP_SHOT_PAGE=gnome-extensions ai-patches/patches/harness/app-shot.sh build/apt-tests/app-extensions.png 15'
+```
+
+Add `APP_SHOT_EXT_SEARCH=clipboard`, `APP_SHOT_EXT_SORT=3` (Installed; a
+name such as `installed` goes through the sort menu's `page.sort` action),
+`APP_SHOT_EXT_OPEN=0` (details of the first result), `APP_SHOT_EXT_LOADING=1`
+(shows the "loading more" dots, otherwise visible only while a page loads),
+`ADW_DEBUG_COLOR_SCHEME=prefer-dark` or `APP_SHOT_WIDTH=400` (narrow
+layout, tab in the bottom bar). `GDK_BACKEND=x11`: a test window covered by
+other windows gets no Wayland frame callbacks, so results that arrive later
+would never be drawn (see Troubleshooting).
+
+Expected: the Search page's search bar with a sort button, the topic pills
+(one scrolling row at 400 px), a grid of extensions with icons; Dash to Dock with a green
+**Enabled** pill, Caffeine with **Disabled**; the dialog with icon, name,
+"by" creator, the **Enabled** switch, **Settings**, **Remove**, the
+screenshot and the description.
+
 ### D2: default handler (installed package)
 
 ```bash
@@ -436,9 +484,15 @@ Run Bazaar as in T10, open **Library** (Ctrl+D).
 | .deb: auth refused | **Install**, dismiss the polkit dialog | back to **Install**, no error |
 | .deb: cancel | **Install**, then **Cancel** while it downloads dependencies | back to **Install**, no error; the dialog could not be closed meanwhile |
 | .deb: already installed | open the same file again after D3 | "This version is installed" and **Open** |
+| E3 ⚠️ Install an extension | GNOME session, installed Warsi: Extensions tab, search "caffeine", open it, **Install** | GNOME Shell's own "Install Extension?" dialog; after **Install** the card shows **Enabled**, the extension works (Caffeine's icon in the top bar). Then **Remove** in the dialog, confirm: the card loses its pill |
+| Extensions: switch | an installed extension's dialog, flip **Enabled** | the extension turns off/on at once; GNOME's Extensions app shows the same |
+| Extensions: settings | an extension with preferences, **Settings** | its preferences window opens |
+| Extensions: turned off | in GNOME's Extensions app turn **Use Extensions** off | the banner appears in Warsi; **Turn On** turns them back on |
+| Extensions: offline | disconnect, open the tab (or **Try Again**) | "Could Not Reach extensions.gnome.org" with **Try Again**; the Installed view still works |
+| Extensions: other desktop | log in to a session without GNOME Shell | no Extensions tab |
 | .deb: network share | open a `.deb` on an SMB/SFTP share mounted in Files | works (copied to `~/.cache/warsi/deb-staging/` first) |
 
-⚠️ **Offline update**, **Live update** and **D3** really change the machine, including
+⚠️ **Offline update**, **Live update**, **D3** and **E3** really change the machine, including
 the removals the card lists. Only run them on a machine where that is wanted,
 and when the person who owns it agrees.
 
@@ -530,3 +584,5 @@ Lessons from earlier runs:
 | Notification shows, click opens Flathub's Bazaar | both builds installed; the D-Bus name `io.github.kolunmi.Bazaar` activates the Flatpak one | test the action with `gapplication action` against the running dev build (T9), or remove the Flatpak while testing |
 | `msgfmt: duplicate message definition` after merging | an obsolete `#~` entry with the same msgid was left in `po/<lang>.po` | the merge script removes it; do not append fragment entries by hand |
 | `APP_SHOT_DEBUG=1` | logs every shim tick: pid, window type, mapped | for debugging T6 |
+| E2: the Extensions tab stays on its spinner, or results show half-scrolled or stale | the test window is covered by other windows; on Wayland the compositor then sends it no frame callbacks, so GTK stops laying it out and animating (the results arrive but are never placed) | `GDK_BACKEND=x11` (Xwayland) as in E2; `app-shot.c` also draws the widgets directly when the window has no frame yet |
+| E1: "a search with no match is empty" fails | extensions.gnome.org matches words inside the query (`no-such-extension` matched "Extension …") | use a query with no real words (`zzqqxxnosuchthing`) |

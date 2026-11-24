@@ -7,7 +7,9 @@ of the Bazaar codebase. The patch has two parts, applied in this order:
 1. **APT system updates** (sections 1–9): the System Updates card and the
    "updates available" notifications, as hooks H1–H13; and the **.deb
    file installer** ([§12](#12-deb-file-installer)): opening a downloaded
-   `.deb` file shows an install dialog, hooks H14–H15.
+   `.deb` file shows an install dialog, hooks H14–H15; and the **GNOME
+   Extensions tab** ([§13](#13-gnome-extensions-tab)): browse, search and
+   manage GNOME Shell extensions from extensions.gnome.org, hooks H16–H17.
 2. **Rebrand to Warsi** ([§10](#10-rebrand-warsi)): turns the patched Bazaar
    into **Warsi** (`id.blankonlinux.warsi`), BlankOn Linux's app store, with
    one script, `patches/rebrand/rebrand.py`.
@@ -108,7 +110,10 @@ apply all updates (offline by default, live optionally), progress, cancel,
 errors, reboot; daily "updates available" notifications for APT and
 Flatpak; installing a local `.deb` file the user opens (§12, added on
 2026-11-17 at the user's request, replacing GNOME Software's installer for
-`.deb` files); Indonesian translations of the patch's strings.
+`.deb` files); a GNOME Extensions tab (§13, added on 2026-11-24 at the
+user's request) that browses extensions.gnome.org and installs, enables,
+disables, configures and removes GNOME Shell extensions through GNOME
+Shell; Indonesian translations of the patch's strings.
 
 **Out of scope (do NOT add when re-applying):**
 
@@ -646,6 +651,7 @@ Append one row per attempt. Never delete rows.
 | 2026-11-15 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (applied on top of the user's commit `3c12e48a`) | 0.10.1 | ✅ Notifications + "Debian APT" + Indonesian; `run-tests.sh --notify` T1–T7 all PASS | New: `bz-update-notifier.{c,h}`, `patches/data/bazaar-update-notifications.desktop`, `patches/po/{id-apt-updates.po,merge-translations.py}`; hooks H7–H12; `BzAptUpdates:loaded`. Real notification seen via org.gtk.Notifications (4 apps, 1393 system); `app.open-library` switched a running window to Library; daemon stays alive only with `update-notifications` on; daily limit and off switch verified. DIFF.md applied to a clean base checkout reproduces the tree byte for byte. Scripts take `BZ_REPO` so they run from `../bazaar-ai-patches`. Not tested: notification click on an installed (packaged) build; login autostart. |
 | 2026-11-15 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `e90c8f37`) | 0.10.1 | ✅ Rebrand to Warsi (`id.blankonlinux.warsi`), step R; `run-tests.sh --notify` with R1 | New: `patches/rebrand/` (`rebrand.py`, `bz-rebrand.{c,h}`, icons, `po/id-rebrand.po`), `patches/harness/brand.sh`; `merge-translations.py` takes fragment arguments; app-shot gains `APP_SHOT_ABOUT`. `rebrand.py --check` clean after one run; installed tree has no Bazaar ID or file name; desktop file and AppStream valid; About dialog shows the note above Bazaar's section (screenshot). 86 translations in 15 languages marked fuzzy (none Indonesian). Uninstalled, T7's notification goes through the portal (no desktop file for the new ID). Not tested: an installed Warsi (notification click, autostart, GNOME search provider). |
 | 2026-11-17 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `1e2931e4`) | 0.10.1 | ✅ .deb file installer (§12), hooks H14–H15; D1 passes; dialog screenshots for new app, older/newer/same version, broken dependencies and damaged file | New: `bz-deb-installer.{c,h}`, `bz-deb-install-dialog.{c,h,blp}`, `patches/data/bazaar-deb-mimeapps.list`, `patches/harness/deb-check.{sh,c}`, `APP_SHOT_OPEN`; 23 Indonesian strings. `gio mime` confirms `/etc/xdg/gnome-mimeapps.list` overrides GNOME Software. DIFF.md's diff applied to a clean base plus `rebrand.py` reproduces the tree. Not tested: a real install (needs the owner's consent), Open after install. |
+| 2026-11-24 | `9560ad18cd60652aae10e81708ff4d36df775aa8` (on top of the user's commit `f19b429b`) | 0.10.1 | ✅ GNOME Extensions tab (§13), hooks H16–H17 (and H1, H2, H5, H6, H12 extended); `run-tests.sh` T1–T6, R1, D1, E1 all PASS (E1: 21 checks against extensions.gnome.org and a fake Shell) | New: `bz-gnome-extensions.{c,h}`, `bz-gnome-extensions-page.{c,h,blp}`, `bz-gnome-extension-dialog.{c,h,blp}`, harness `ext-check.{c,sh}`, `fake-shell-extensions.py`; app-shot gains `APP_SHOT_PAGE`, `APP_SHOT_EXT_*`, `APP_SHOT_WIDTH`. Screenshots: grid, search, Installed view, dialogs (user and system extension), dark, narrow. DIFF.md diff applied to a clean base checkout plus masters, translations and rebrand reproduces the tree. Not tested: installing from the real GNOME Shell (E3). |
 
 
 ## 12. .deb file installer
@@ -753,3 +759,107 @@ Package** dialog:
   contains `GNOME`) only.
 - Not exercised automatically: a real install (it changes the machine).
   TEST.md D3 is the manual test.
+
+## 13. GNOME Extensions tab
+
+### 13.1 Goal
+
+Added 2026-11-24 at the owner's request: an **Extensions** tab after
+Search that lists GNOME Shell extensions from
+[extensions.gnome.org](https://extensions.gnome.org/) (search included),
+and installs and manages them, so BlankOn users need neither the website's
+browser connector nor a separate Extension Manager app.
+
+### 13.2 What the user sees
+
+- A fourth tab, **Extensions** (`application-x-addon-symbolic`), shown only
+  when GNOME Shell's extension service is on the session bus (hidden in
+  other desktops). In narrow windows it moves to the bottom bar with the
+  others.
+- At the top, the same search bar as the Search page (upstream's
+  `BzSearchBar`), with a sort button where that page has its filter button
+  (highlighted when not the default): **Popular** (downloads), **Trending**
+  (recent popularity), **Recent** (last updated), and **Installed** (the
+  user's extensions, from GNOME Shell, filtered by the same search). Only
+  extensions compatible with the running GNOME Shell version are listed.
+- Below it, topic pills styled like the Search page's (owner's request,
+  2026-11-24): Dock, Top Bar, Workspaces, Windows, App Menu, Clipboard,
+  System Monitor, Battery, Weather, Appearance, Wallpaper, Screenshot.
+  extensions.gnome.org has no categories, so a pill searches for an English
+  keyword (`pills[]` in `bz-gnome-extensions-page.c`; "Top Bar" searches
+  "panel", "Appearance" "theme"). Wrapped when wide, one scrolling row
+  when narrow.
+- A grid of cards like the app cards: icon (a generic puzzle piece when the
+  extension has none), name, first line of the description, and an
+  **Enabled** pill (green) or a grey status pill (Disabled, Error,
+  Incompatible, ...) for installed ones. Scrolling near the end loads the
+  next page (24 per page); while it loads, three dots pulse slowly in a
+  small pill at the bottom (owner's request; CSS loaded by the page, no
+  change to upstream's `style.css`).
+- Clicking a card opens a dialog: icon, name, "by" creator, **Install** for
+  a new extension (GNOME Shell then shows its own confirmation), or for an
+  installed one an **Enabled** switch, **Settings** (when it has
+  preferences) and **Remove** (only for the user's own extensions; asks
+  first). Then the screenshot, the description, downloads, links to its
+  extensions.gnome.org page and website, Shell's error if it failed, and a
+  note that extensions run with full access to the session.
+- If the user turned extensions off in GNOME, a banner says so with
+  **Turn On**. If extensions.gnome.org cannot be reached, the page says so
+  with **Try Again**.
+
+### 13.3 How it works
+
+New files (masters in `patches/src/`):
+
+| File | Role |
+|---|---|
+| `bz-gnome-extensions.{c,h}` | `BzGnomeExtension` (one extension) and `BzGnomeExtensions` (the model): extensions.gnome.org's JSON API over libsoup, GNOME Shell's D-Bus service over GDBus. No other Bazaar code. |
+| `bz-gnome-extensions-page.{c,h,blp}` | the tab: search bar, sort menu (`page.sort` action on the `sort-name` property), topic pills, grid, paging, empty and error states |
+| `bz-gnome-extension-dialog.{c,h,blp}` | the details dialog and its actions |
+
+- **Listing:** `GET /extension-query/?search=…&sort=downloads|popularity|recent&page=N&n_per_page=24&shell_version=MAJOR`.
+  Icons and screenshots are fetched as textures (screenshots only when the
+  dialog opens). Nothing is fetched until the tab is first shown.
+- **Installed view:** GNOME Shell's `ListExtensions`; each one's icon and
+  link from `GET /extension-info/?uuid=…` (404 for extensions not on the
+  site, e.g. system ones: they keep the generic icon).
+- **Actions:** GNOME Shell's `InstallRemoteExtension` (Shell downloads the
+  right version from extensions.gnome.org and asks the user),
+  `EnableExtension`, `DisableExtension`, `UninstallExtension`,
+  `OpenExtensionPrefs`, and the `UserExtensionsEnabled` property. Shell's
+  `ExtensionStateChanged` signal keeps every card and dialog current, also
+  for changes made elsewhere (the Extensions app, the website).
+- Hooks: H1 (sources), H2 (UI files), H5 (translatable files), H6
+  (Flatpak: `--talk-name=org.gnome.Shell.Extensions`), H12 (Indonesian),
+  H16 (`bz-window.c` registers the page type), H17 (`bz-window.blp` adds
+  the tab). See DIFF.md and API.md §3.8–§3.9.
+
+### 13.4 Design decisions
+
+- **Install through GNOME Shell, never by unpacking zips ourselves:** Shell
+  picks the build for its version, verifies it, shows its own consent
+  dialog and loads it without a re-login; the same path the website's
+  browser connector uses. Warsi never writes to the extensions folder.
+- **The same API as the website and GNOME Extension Manager:** public, no
+  key. It is not formally versioned; all of it is in one file
+  (`bz-gnome-extensions.c`) so a change on the site is one place to fix.
+- **libsoup and json-glib directly, not Bazaar's network helpers:** keeps
+  the model free of Bazaar code, so `ext-check` (E1) can test it alone.
+  Both libraries are already Bazaar dependencies.
+- **Tab hidden without GNOME Shell:** nothing in it could work there.
+- **Remove only per-user extensions:** Shell cannot remove system ones
+  (installed by packages); their switch still works.
+
+### 13.5 Limitations
+
+- Needs GNOME Shell (any desktop without `org.gnome.Shell.Extensions`
+  hides the tab) and network access to extensions.gnome.org.
+- Extension updates are left to GNOME Shell, which updates them itself at
+  login; Warsi does not list them in the Library.
+- No reviews or ratings, no version picker, no "Details" from metadata
+  beyond what the site returns; descriptions are plain text.
+- The preferences window opens without a parent (no xdg-foreign handle).
+- Not exercised automatically: installing from the real GNOME Shell (it
+  changes the user's session). TEST.md E3 is the manual test; E1 and E2
+  use a fake Shell.
+

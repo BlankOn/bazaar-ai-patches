@@ -1,6 +1,6 @@
 #!/bin/sh
 # DOWNSTREAM PATCH (APT system updates): run every automated test in
-# ai-patches/TEST.md (T1-T7, D1, and R1 on a Warsi-rebranded tree) in order.
+# ai-patches/TEST.md (T1-T7, D1, E1, and R1 on a Warsi-rebranded tree) in order.
 # Never installs or removes packages, never reboots.
 #
 # Usage:  ai-patches/patches/harness/run-tests.sh [--no-app] [--notify]
@@ -58,6 +58,14 @@ t1_static () {
            src/bz-deb-install-dialog.blp data/bazaar-deb-mimeapps.list; do
     grep -q "DOWNSTREAM PATCH (APT system updates)" "$f" || { echo "MISSING MARKER: $f"; ok=1; }
   done
+  for f in src/meson.build src/bazaar.gresource.xml po/POTFILES.in src/bz-window.c src/bz-window.blp \
+           src/bz-gnome-extensions.h src/bz-gnome-extensions.c \
+           src/bz-gnome-extensions-page.h src/bz-gnome-extensions-page.c src/bz-gnome-extensions-page.blp \
+           src/bz-gnome-extension-dialog.h src/bz-gnome-extension-dialog.c src/bz-gnome-extension-dialog.blp; do
+    grep -q "DOWNSTREAM PATCH (GNOME Extensions)" "$f" || { echo "MISSING GNOME EXTENSIONS MARKER: $f"; ok=1; }
+  done
+  grep -q -- "--talk-name=org.gnome.Shell.Extensions" build-aux/flatpak/io.github.kolunmi.Bazaar.json ||
+    { echo "MISSING: org.gnome.Shell.Extensions in the Flatpak manifest"; ok=1; }
   if [ $REBRANDED = 1 ]; then
     for f in src/bz-rebrand.h src/bz-rebrand.c src/bz-application.c src/meson.build; do
       grep -q "DOWNSTREAM PATCH (Warsi rebrand)" "$f" || { echo "MISSING REBRAND MARKER: $f"; ok=1; }
@@ -146,6 +154,13 @@ d1_deb () {
     { echo "MISSING: default handler in data/bazaar-deb-mimeapps.list"; return 1; }
 }
 
+e1_extensions () {
+  rc=0
+  "$HERE/ext-check.sh" > "$OUT/ext-check.log" 2>&1 || rc=1
+  grep -E "^(PASS|FAIL)" "$OUT/ext-check.log"
+  return $rc
+}
+
 t4_counts () {
   python3 -I "$HERE/check-counts.py"
 }
@@ -164,7 +179,19 @@ t6_app () {
   { [ $REBRANDED = 0 ] || APP_SHOT_ABOUT=1 "$HERE/app-shot.sh" "$OUT/app-about.png" 20 2>&1 | grep -E "Saved"; } &&
   { [ ! -f "$OUT/deb/bz-deb-check-app_1.0_all.deb" ] ||
     APP_SHOT_OPEN="$OUT/deb/bz-deb-check-app_1.0_all.deb" "$HERE/app-shot.sh" "$OUT/app-deb-install.png" 20 2>&1 | grep -E "Saved"; } &&
+  extensions_shot "$OUT/app-extensions.png" &&
+  APP_SHOT_EXT_OPEN=0 extensions_shot "$OUT/app-extension-dialog.png" &&
   [ -s "$OUT/app-library.png" ]
+}
+
+# The Extensions tab with the fake GNOME Shell (TEST.md E2), on its own
+# private bus. X11 backend: a covered Wayland window gets no frame callbacks,
+# so results arriving later would never be laid out.
+extensions_shot () {
+  dbus-run-session -- sh -c "
+    python3 -I '$HERE/fake-shell-extensions.py' 2>/dev/null &
+    sleep 1
+    GDK_BACKEND=x11 APP_SHOT_PAGE=gnome-extensions '$HERE/app-shot.sh' '$1' 15" 2>&1 | grep -E "Saved"
 }
 
 t7_notify () {
@@ -183,6 +210,7 @@ step T3 "full $APP_BIN build, no patch warnings" t3_full_build
 step T4 "card counts match PackageKit and apt" t4_counts
 step T5 "harness screenshots" t5_harness_shots
 step D1 ".deb installer reads packages (simulated, installs nothing)" d1_deb
+step E1 "GNOME Extensions model: extensions.gnome.org and a fake Shell" e1_extensions
 case " $* " in *" --no-app "*) ;; *)
   step T6 "real $APP_BIN app: Library page (and About) screenshots" t6_app ;;
 esac

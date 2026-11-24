@@ -118,6 +118,23 @@ of `-Werror` (deprecation warnings). For libadwaita availability macros:
 grep -h -B3 -E "adw_alert_dialog_choose|adw_preferences_row_set_use_markup|adw_action_row_set_subtitle_selectable" /usr/include/libadwaita-1/*.h | grep -oE "ADW_(AVAILABLE_IN_[0-9_]+|DEPRECATED[A-Z_0-9]*)"
 ```
 
+### 2.3a GNOME Shell extensions and extensions.gnome.org (§3.8–§3.9)
+
+In a GNOME session (read-only calls):
+
+```bash
+gdbus introspect --session --dest org.gnome.Shell.Extensions --object-path /org/gnome/Shell/Extensions | grep -E "ListExtensions|InstallRemoteExtension|UninstallExtension|EnableExtension|DisableExtension|OpenExtensionPrefs|ExtensionStateChanged|ShellVersion|UserExtensionsEnabled" | wc -l
+```
+
+Expected: `9` (each name once, with the signatures listed in §3.8).
+
+```bash
+curl -s 'https://extensions.gnome.org/extension-query/?search=&sort=downloads&page=1&n_per_page=2&shell_version=50' | python3 -c "import sys, json; d = json.load(sys.stdin); e = d['extensions'][0]; print(sorted(k for k in ('numpages',) if k in d), sorted(k for k in ('uuid','name','creator','description','link','icon','screenshot','url','downloads') if k in e))"
+```
+
+Expected: `['numpages'] ['creator', 'description', 'downloads', 'icon', 'link', 'name', 'screenshot', 'url', 'uuid']`.
+TEST.md E1 exercises both for real (with a fake Shell).
+
 ### 2.4 Blueprint syntax (§3.7)
 
 `blueprint-compiler compile` on `patches/src/bz-apt-updates-card.blp` and on
@@ -391,6 +408,11 @@ harmless.
 | `config.h` defines `APPLICATION_ID` (`io.github.kolunmi.Bazaar`) | `meson.build` | notification `app_id` | `grep -n APPLICATION_ID meson.build` |
 | Upstream build/run quirks: refresh worker spawned as `bazaar` from `PATH`; `scripts/countries.py` needs `python3-babel` | `src/bz-application.c`, `src/meson.build` | **verification only** | TEST.md §0, T6 |
 
+| `BzWindow` main `AdwViewStack main_view_stack` with the pages `browse`, `flathub`, `installed`, `search` (`Adw.ViewStackPage` with `title`, `icon-name`, `child`); the window's `AdwViewSwitcher`/`AdwViewSwitcherBar` show every visible page | `src/bz-window.blp` | hook H17 adds the `gnome-extensions` page after `search` | DIFF.md H17 |
+| `bz_window_class_init` calls `g_type_ensure` for the page types before `gtk_widget_class_set_template_from_resource` | `src/bz-window.c` | hook H16 | DIFF.md H16 |
+| Style classes `search-grid` (GridView of cards), `installed-pill`, `small-pill`, `download-size-pill`, `search-pill`, `searchbar-button` | `src/style.css` | the Extensions grid, its pills and its topic pills (cosmetic only: without them it still works) | `grep -n "search-grid\|installed-pill\|small-pill\|search-pill" src/style.css` |
+| `BzSearchBar` (`bz-search-bar.h`): a `GtkEditable` with `placeholder` and `end-widget` properties and `search-changed`/`search-activated` signals; icon `sliders-horizontal-symbolic` in the resources | `src/bz-search-bar.{c,h,blp}` | the Extensions search bar and its sort button | `grep -n "search-changed\|search-activated\|end-widget" src/bz-search-bar.c` |
+
 **Default application lookup** (hook H15): freedesktop.org "Association
 between MIME types and applications" spec: `$XDG_CONFIG_DIRS/$desktop-mimeapps.list`
 is read before `$XDG_DATA_DIRS/applications/$desktop-mimeapps.list`.
@@ -398,7 +420,46 @@ GLib implements it (`gio mime TYPE` shows the result).
 
 The patch does **not** use `BzBackend`, `BzEntry`, `BzStateInfo`,
 `BzTransactionManager`, libdex or any Vala-generated API. Changes there do
-not affect it. It uses libflatpak only to count updates (§3.2a).
+not affect it. It uses libflatpak only to count updates (§3.2a). The
+Extensions tab uses libsoup 3 and json-glib directly (both already Bazaar
+dependencies, `libsoup_dep` and `json_glib_dep` in `src/meson.build`).
+
+### 3.8 GNOME Shell extensions D-Bus API (session bus)
+
+Service `org.gnome.Shell.Extensions`, object `/org/gnome/Shell/Extensions`,
+interface `org.gnome.Shell.Extensions` (GNOME Shell's
+`js/ui/shellDBus.js`; the same one `gnome-extensions` and the Extensions app
+use). Checked on GNOME Shell 50.4. Used by `bz-gnome-extensions.c`:
+
+| Member | Signature | Use |
+|---|---|---|
+| `ListExtensions` | `() → a{sa{sv}}` | installed extensions, keyed by UUID |
+| `InstallRemoteExtension` | `(s uuid) → s` | install from extensions.gnome.org; Shell asks the user; returns `successful` or `cancelled` |
+| `EnableExtension` / `DisableExtension` | `(s uuid) → b` | switch |
+| `UninstallExtension` | `(s uuid) → b` | remove (per-user extensions only) |
+| `OpenExtensionPrefs` | `(s uuid, s parent_window, a{sv} options) → ()` | Settings (`parent_window` is `""`) |
+| signal `ExtensionStateChanged` | `(s uuid, a{sv} info)` | live state |
+| property `ShellVersion` | `s` (`"50.4"`) | `shell_version=` filter (major part) |
+| property `UserExtensionsEnabled` | `b`, read-write | banner and **Turn On** |
+
+Info keys read: `state` (`d`: 1 active, 2 inactive, 3 error, 4 out of
+date, 5 downloading, 6 initialized, 7 deactivating, 8 activating, 99
+uninstalled), `enabled` (`b`), `type` (`d`: 1 system, 2 per user),
+`hasPrefs` (`b`), `canChange` (`b`), `error` (`s`), `name`,
+`description`, `url` (`s`). Missing keys fall back to safe defaults.
+
+### 3.9 extensions.gnome.org JSON API (HTTPS, no key)
+
+| Request | Answer used |
+|---|---|
+| `GET /extension-query/?search=TEXT&sort=downloads\|popularity\|recent&page=N&n_per_page=24&shell_version=MAJOR` | `numpages`, `extensions[]` |
+| `GET /extension-info/?uuid=UUID` | one extension object (404 when unknown) |
+| `GET` the `icon` and `screenshot` paths | PNG/JPEG images |
+
+Extension object fields read: `uuid`, `name`, `creator`, `description`,
+`link` (path of its page), `icon` (path; `/static/images/plugin.png` means
+none), `screenshot` (path or null), `url` (its website), `downloads`
+(number or string). Not a versioned API: §2.3a checks the fields.
 
 ### 3.7 Blueprint language features used
 

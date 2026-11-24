@@ -40,6 +40,102 @@ expand_apt_card (GtkWidget *widget,
     expand_apt_card (child, inside);
 }
 
+/* First descendant of widget (itself included) of the named type. */
+static GtkWidget *
+find_typed (GtkWidget  *widget,
+            const char *type_name,
+            GType       type)
+{
+  if ((type_name != NULL && g_strcmp0 (G_OBJECT_TYPE_NAME (widget), type_name) == 0) ||
+      (type != G_TYPE_INVALID && g_type_is_a (G_OBJECT_TYPE (widget), type)))
+    return widget;
+
+  for (GtkWidget *child = gtk_widget_get_first_child (widget);
+       child != NULL;
+       child = gtk_widget_get_next_sibling (child))
+    {
+      GtkWidget *found = find_typed (child, type_name, type);
+      if (found != NULL)
+        return found;
+    }
+  return NULL;
+}
+
+static GtkWidget *
+find_css_class (GtkWidget  *widget,
+                const char *css_class)
+{
+  if (gtk_widget_has_css_class (widget, css_class))
+    return widget;
+  for (GtkWidget *child = gtk_widget_get_first_child (widget);
+       child != NULL;
+       child = gtk_widget_get_next_sibling (child))
+    {
+      GtkWidget *found = find_css_class (child, css_class);
+      if (found != NULL)
+        return found;
+    }
+  return NULL;
+}
+
+/* APP_SHOT_PAGE=NAME: show that page of the window's main view stack. */
+static gboolean
+open_page (GtkWidget  *widget,
+           const char *name)
+{
+  if (ADW_IS_VIEW_STACK (widget) && adw_view_stack_get_child_by_name (ADW_VIEW_STACK (widget), name) != NULL)
+    {
+      adw_view_stack_set_visible_child_name (ADW_VIEW_STACK (widget), name);
+      return TRUE;
+    }
+  for (GtkWidget *child = gtk_widget_get_first_child (widget);
+       child != NULL;
+       child = gtk_widget_get_next_sibling (child))
+    if (open_page (child, name))
+      return TRUE;
+  return FALSE;
+}
+
+/* DOWNSTREAM PATCH (GNOME Extensions): APP_SHOT_EXT_SEARCH=TEXT and
+ * APP_SHOT_EXT_SORT=N (0 Popular, 1 Trending, 2 Recent, 3 Installed, or
+ * the name: popular, trending, recent, installed) set
+ * the Extensions page's search; APP_SHOT_EXT_OPEN=N opens the details of
+ * result N; APP_SHOT_EXT_LOADING=1 shows the "loading more" dots. */
+static void
+drive_extensions_page (GtkWidget *window,
+                       int        ticks_left)
+{
+  GtkWidget *page = find_typed (window, "BzGnomeExtensionsPage", G_TYPE_INVALID);
+
+  if (page == NULL)
+    return;
+  /* A number sets the "sort" property; a name (popular, trending, recent,
+   * installed) goes through the sort menu's "page.sort" action. */
+  if (ticks == 3 && g_getenv ("APP_SHOT_EXT_SORT") != NULL)
+    {
+      const char *sort = g_getenv ("APP_SHOT_EXT_SORT");
+
+      if (g_ascii_isdigit (sort[0]))
+        g_object_set (page, "sort", atoi (sort), NULL);
+      else
+        gtk_widget_activate_action (page, "page.sort", "s", sort);
+    }
+  if (ticks == 3 && g_getenv ("APP_SHOT_EXT_SEARCH") != NULL)
+    gtk_editable_set_text (GTK_EDITABLE (find_typed (page, "BzSearchBar", G_TYPE_INVALID)),
+                           g_getenv ("APP_SHOT_EXT_SEARCH"));
+  /* APP_SHOT_EXT_LOADING=1: show the "loading more" dots (normally only
+   * visible for the second or so the next page takes). */
+  if (ticks_left <= 2 && g_getenv ("APP_SHOT_EXT_LOADING") != NULL)
+    {
+      GtkWidget *dots = find_css_class (page, "extensions-loading-more");
+      if (dots != NULL)
+        gtk_widget_set_visible (dots, TRUE);
+    }
+  if (ticks_left == 4 && g_getenv ("APP_SHOT_EXT_OPEN") != NULL)
+    g_signal_emit_by_name (find_typed (page, NULL, GTK_TYPE_GRID_VIEW), "activate",
+                           (guint) atoi (g_getenv ("APP_SHOT_EXT_OPEN")));
+}
+
 static gboolean
 save_png (GtkWidget  *window,
           const char *path)
@@ -56,6 +152,15 @@ save_png (GtkWidget  *window,
   snapshot  = gtk_snapshot_new ();
   gdk_paintable_snapshot (paintable, snapshot, width, height);
   node    = gtk_snapshot_free_to_node (snapshot);
+  /* A window that never got a frame (covered by other windows: the
+   * compositor sends it no frame callbacks) has no drawing for the
+   * paintable to show: draw its widgets directly. */
+  if (node == NULL)
+    {
+      snapshot = gtk_snapshot_new ();
+      GTK_WIDGET_GET_CLASS (window)->snapshot (window, snapshot);
+      node = gtk_snapshot_free_to_node (snapshot);
+    }
   /* The window's own (GPU) renderer produced only the background when
    * rendering Bazaar's window offscreen; GTK's software renderer works. */
   renderer = gsk_cairo_renderer_new ();
@@ -100,7 +205,12 @@ tick_cb (gpointer data)
       if (paintable == NULL)
         paintable = gtk_widget_paintable_new (window);
 
-      gtk_widget_activate_action (window, "window.open-library", NULL);
+
+      if (g_getenv ("APP_SHOT_PAGE") != NULL)
+        open_page (window, g_getenv ("APP_SHOT_PAGE"));
+      else
+        gtk_widget_activate_action (window, "window.open-library", NULL);
+      drive_extensions_page (window, delay - ticks);
 
       /* APP_SHOT_WIDTH=N: resize the window, e.g. below the 700 px
        * breakpoint for the narrow layout. */

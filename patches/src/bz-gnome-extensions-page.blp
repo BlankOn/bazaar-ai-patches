@@ -1,0 +1,382 @@
+// DOWNSTREAM PATCH (GNOME Extensions): see ai-patches/PLAN.md §13.
+using Gtk 4.0;
+using Adw 1;
+
+template $BzGnomeExtensionsPage: Adw.Bin {
+  child: Adw.BreakpointBin {
+    width-request: 360;
+    height-request: 200;
+
+    child: Box {
+      orientation: vertical;
+
+      Adw.Banner {
+        title: _("GNOME Shell extensions are turned off");
+        button-label: _("_Turn On");
+        revealed: bind $invert_boolean(template.extensions as <$BzGnomeExtensions>.user-extensions-enabled) as <bool>;
+        button-clicked => $turn_on_cb(template);
+      }
+
+      // The same search bar as the Search page (BzSearchBar); the sort menu
+      // sits where that page has its filter button.
+      Adw.Clamp search_clamp {
+        margin-start: 12;
+        margin-end: 12;
+        margin-top: 10;
+        margin-bottom: 10;
+        maximum-size: 375;
+
+        child: $BzSearchBar search_bar {
+          placeholder: _("Search Extensions");
+          search-changed => $search_changed_cb(template);
+          search-activated => $search_activated_cb(template);
+
+          end-widget: MenuButton sort_button {
+            icon-name: "sliders-horizontal-symbolic";
+            tooltip-text: _("Sort");
+            valign: center;
+            menu-model: sort_menu;
+
+            styles [
+              "flat",
+              "circular",
+              "searchbar-button",
+            ]
+
+            accessibility {
+              label: _("Sort");
+            }
+          };
+        };
+      }
+
+      // Topic pills like the Search page's (filled in by the page): they
+      // search for a keyword, extensions.gnome.org has no categories.
+      // Wrapped when wide, one scrolling row when narrow.
+      Adw.Clamp pill_clamp {
+        maximum-size: 1000;
+        tightening-threshold: 900;
+        margin-bottom: 12;
+
+        child: Box pill_box {
+          margin-start: 30;
+          margin-end: 30;
+        };
+      }
+
+      ScrolledWindow pill_scroller {
+        visible: false;
+        hscrollbar-policy: external;
+        vscrollbar-policy: never;
+        margin-bottom: 8;
+
+        child: Box pill_row {
+          spacing: 8;
+          margin-start: 12;
+          margin-end: 12;
+        };
+      }
+
+      Stack stack {
+        vexpand: true;
+        transition-type: crossfade;
+
+        StackPage {
+          name: "loading";
+
+          child: Adw.Spinner {
+            width-request: 32;
+            height-request: 32;
+            halign: center;
+            valign: center;
+          };
+        }
+
+        StackPage {
+          name: "results";
+
+          child: Overlay {
+            child: ScrolledWindow scrolled_window {
+              hexpand: true;
+              vexpand: true;
+              hscrollbar-policy: never;
+
+              child: Adw.ClampScrollable {
+                maximum-size: 1500;
+                tightening-threshold: 1400;
+
+                child: GridView grid_view {
+                  styles [
+                    "search-grid",
+                  ]
+
+                  min-columns: 4;
+                  max-columns: 4;
+                  margin-start: 30;
+                  margin-end: 30;
+                  margin-bottom: 24;
+                  enable-rubberband: false;
+                  single-click-activate: true;
+                  activate => $activate_cb(template);
+
+                  factory: BuilderListItemFactory {
+                    template ListItem {
+                      child: Box {
+                        styles [
+                          "card",
+                          "activatable",
+                        ]
+
+                        orientation: horizontal;
+                        spacing: 15;
+                        margin-top: 6;
+                        margin-bottom: 6;
+                        margin-start: 6;
+                        margin-end: 6;
+                        height-request: 112;
+
+                        Box {
+                          margin-start: 12;
+                          valign: center;
+
+                          Image {
+                            pixel-size: 64;
+                            paintable: bind template.item as <$BzGnomeExtension>.icon;
+                            visible: bind template.item as <$BzGnomeExtension>.has-icon;
+                          }
+
+                          Image {
+                            pixel-size: 48;
+                            width-request: 64;
+                            height-request: 64;
+                            icon-name: "application-x-addon-symbolic";
+                            visible: bind $invert_boolean(template.item as <$BzGnomeExtension>.has-icon) as <bool>;
+
+                            styles [
+                              "dimmed",
+                            ]
+                          }
+                        }
+
+                        Box {
+                          orientation: vertical;
+                          valign: center;
+                          hexpand: true;
+                          spacing: 4;
+                          margin-top: 12;
+                          margin-bottom: 12;
+                          margin-end: 12;
+
+                          Label {
+                            xalign: 0.0;
+                            ellipsize: end;
+                            label: bind template.item as <$BzGnomeExtension>.name;
+
+                            styles [
+                              "heading",
+                            ]
+                          }
+
+                          Label {
+                            xalign: 0.0;
+                            yalign: 0.0;
+                            wrap: true;
+                            wrap-mode: word_char;
+                            ellipsize: end;
+                            lines: 2;
+                            label: bind $first_line(template.item as <$BzGnomeExtension>.description) as <string>;
+                          }
+
+                          Box {
+                            halign: start;
+                            spacing: 4;
+                            margin-top: 2;
+                            visible: bind template.item as <$BzGnomeExtension>.active;
+
+                            styles [
+                              "installed-pill",
+                              "small-pill",
+                            ]
+
+                            Image {
+                              icon-name: "app-installed-symbolic";
+                            }
+
+                            Label {
+                              label: _("Enabled");
+
+                              styles [
+                                "caption-heading",
+                              ]
+                            }
+                          }
+
+                          Box {
+                            halign: start;
+                            margin-top: 2;
+                            visible: bind template.item as <$BzGnomeExtension>.show-status-pill;
+
+                            styles [
+                              "small-pill",
+                              "dimmed",
+                              "download-size-pill",
+                            ]
+
+                            Label {
+                              label: bind template.item as <$BzGnomeExtension>.status-label;
+
+                              styles [
+                                "caption-heading",
+                              ]
+                            }
+                          }
+                        }
+                      };
+                    }
+                  };
+                };
+              };
+            };
+
+            // Three dots pulsing while the next page loads (CSS in the page).
+
+            [overlay]
+            Box {
+              halign: center;
+              valign: end;
+              margin-bottom: 18;
+              spacing: 6;
+              can-target: false;
+              visible: bind template.extensions as <$BzGnomeExtensions>.loading-more;
+
+              accessibility {
+                label: _("Loading more extensions");
+              }
+
+              styles [
+                "card",
+                "extensions-loading-more",
+              ]
+
+              Box {
+                styles [
+                  "dot",
+                ]
+              }
+
+              Box {
+                styles [
+                  "dot",
+                ]
+              }
+
+              Box {
+                styles [
+                  "dot",
+                ]
+              }
+            }
+          };
+        }
+
+        StackPage {
+          name: "empty";
+
+          child: Adw.StatusPage empty_page {
+            icon-name: "system-search-symbolic";
+            title: _("No Extensions Found");
+          };
+        }
+
+        StackPage {
+          name: "error";
+
+          child: Adw.StatusPage {
+            icon-name: "network-error-symbolic";
+            title: _("Could Not Reach extensions.gnome.org");
+            description: _("Check your internet connection and try again.");
+
+            child: Button {
+              halign: center;
+              label: _("_Try Again");
+              use-underline: true;
+              clicked => $retry_cb(template);
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            };
+          };
+        }
+      }
+    };
+
+    Adw.Breakpoint {
+      condition ("max-width: 1300px")
+
+      setters {
+        grid_view.min-columns: 3;
+        grid_view.max-columns: 3;
+      }
+    }
+
+    Adw.Breakpoint {
+      condition ("max-width: 900px")
+
+      setters {
+        grid_view.min-columns: 2;
+        grid_view.max-columns: 2;
+      }
+    }
+
+    Adw.Breakpoint {
+      condition ("max-width: 700px")
+
+      setters {
+        pill_clamp.visible: false;
+        pill_scroller.visible: true;
+        grid_view.margin-start: 3;
+        grid_view.margin-end: 3;
+        grid_view.min-columns: 1;
+        grid_view.max-columns: 1;
+      }
+    }
+  };
+}
+
+menu sort_menu {
+  section {
+    label: _("Sort");
+
+    item {
+      // Translators: sort GNOME Shell extensions by downloads
+      label: _("Popular");
+      action: "page.sort";
+      target: "popular";
+    }
+
+    item {
+      // Translators: sort GNOME Shell extensions by recent popularity
+      label: _("Trending");
+      action: "page.sort";
+      target: "trending";
+    }
+
+    item {
+      // Translators: sort GNOME Shell extensions by last update
+      label: _("Recent");
+      action: "page.sort";
+      target: "recent";
+    }
+  }
+
+  section {
+    item {
+      // Translators: show the GNOME Shell extensions installed on this computer
+      label: _("Installed");
+      action: "page.sort";
+      target: "installed";
+    }
+  }
+}

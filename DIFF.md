@@ -5,13 +5,14 @@ exist upstream**: what changes, why it is needed, and how it connects to the
 entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 
 - Base commit: `9560ad18cd60652aae10e81708ff4d36df775aa8` (see [API.md §1](API.md#1-base-the-codebase-the-patch-was-written-against)).
-- Upstream files touched: **13** by hooks H1–H11 and H13–H15 (about 190
-  added lines, 2 changed lines, nothing deleted), plus `po/id.po`, which
-  hook H12 extends with a script (about 280 appended lines; one obsolete
-  entry removed).
+- Upstream files touched: **15** by hooks H1–H11 and H13–H17 (about 230
+  added lines, 3 changed lines, nothing deleted), plus `po/id.po`, which
+  hook H12 extends with a script (about 380 appended lines; two obsolete
+  entries removed).
 - Every hook except the JSON manifest carries the marker
-  `DOWNSTREAM PATCH (APT system updates)`; find them with
-  `git grep -n "DOWNSTREAM PATCH (APT system updates)"`.
+  `DOWNSTREAM PATCH (APT system updates)`, or for the GNOME Extensions tab
+  (PLAN.md §13) `DOWNSTREAM PATCH (GNOME Extensions)`; find them with
+  `git grep -n "DOWNSTREAM PATCH ("`.
 - Then the **rebrand to Warsi** (step R, last) changes about 150 more files.
   It is a script, not hooks: see [R](#r-rebrand-to-warsi-script-no-diff).
   Its own code changes carry `DOWNSTREAM PATCH (Warsi rebrand)`.
@@ -50,16 +51,24 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
  data/…desktop.in ───────(H15)──► MimeType: application/vnd.debian.binary-package
  data/meson.build ───────(H15)──► installs data/bazaar-deb-mimeapps.list
                                    as $sysconfdir/xdg/gnome-mimeapps.list (default handler)
+ src/meson.build ─────────(H1)──► compiles  src/bz-gnome-extensions.c, src/bz-gnome-extensions-page.{c,blp},
+                                             src/bz-gnome-extension-dialog.{c,blp}
+ src/bazaar.gresource.xml ─(H2)──► embeds    bz-gnome-extensions-page.ui, bz-gnome-extension-dialog.ui
+ build-aux/flatpak/…json ─(H6)──► --talk-name=org.gnome.Shell.Extensions
+ src/bz-window.c ────────(H16)──► g_type_ensure (BZ_TYPE_GNOME_EXTENSIONS_PAGE)
+ src/bz-window.blp ──────(H17)──► Adw.ViewStackPage "gnome-extensions" → $BzGnomeExtensionsPage
+                                       └─► BzGnomeExtensions (bz-gnome-extensions.c):
+                                           extensions.gnome.org + org.gnome.Shell.Extensions
 ```
 
 | Hook | Upstream file | New file / symbol it connects to |
 |---|---|---|
-| H1 | `src/meson.build` | `bz-apt-updates.c`, `bz-apt-updates-card.c`, `bz-apt-updates-card.blp`, `bz-update-notifier.c`, `bz-deb-installer.c`, `bz-deb-install-dialog.c`, `bz-deb-install-dialog.blp` |
-| H2 | `src/bazaar.gresource.xml` | `bz-apt-updates-card.ui`, `bz-deb-install-dialog.ui` (compiled from the `.blp` files) |
+| H1 | `src/meson.build` | `bz-apt-updates.c`, `bz-apt-updates-card.c`, `bz-apt-updates-card.blp`, `bz-update-notifier.c`, `bz-deb-installer.c`, `bz-deb-install-dialog.c`, `bz-deb-install-dialog.blp`, `bz-gnome-extensions.c`, `bz-gnome-extensions-page.{c,blp}`, `bz-gnome-extension-dialog.{c,blp}` |
+| H2 | `src/bazaar.gresource.xml` | `bz-apt-updates-card.ui`, `bz-deb-install-dialog.ui`, `bz-gnome-extensions-page.ui`, `bz-gnome-extension-dialog.ui` (compiled from the `.blp` files) |
 | H3 | `src/bz-library-page.c` | `bz-apt-updates-card.h` → `BZ_TYPE_APT_UPDATES_CARD` |
 | H4 | `src/bz-library-page.blp` | `BzAptUpdatesCard` widget type |
-| H5 | `po/POTFILES.in` | `_()` strings in the seven files |
-| H6 | `build-aux/flatpak/io.github.kolunmi.Bazaar.json` | D-Bus names called by `bz-apt-updates.c` (see API.md §3.1–§3.2) |
+| H5 | `po/POTFILES.in` | `_()` strings in the twelve files |
+| H6 | `build-aux/flatpak/io.github.kolunmi.Bazaar.json` | D-Bus names called by `bz-apt-updates.c` and `bz-gnome-extensions.c` (see API.md §3.1–§3.2, §3.8) |
 | H7 | `src/update-worker.c` | `bz_update_notifier_run ()` |
 | H8 | `src/bazaar-daemon.c` | GSettings key `update-notifications` (H10) |
 | H9 | `src/bz-application.c` | `bz_update_notifier_add_app_actions ()` |
@@ -69,12 +78,15 @@ entirely new files in [`patches/`](patches/). Read [PLAN.md](PLAN.md) first.
 | H13 | `src/main.c` | none: chooses GTK's renderer (GL; Cairo where GL is software-only) |
 | H14 | `src/bz-application.c` | `bz_deb_install_dialog_handles ()`, `bz_deb_install_dialog_open ()` (`bz-deb-install-dialog.c`) |
 | H15 | `data/io.github.kolunmi.Bazaar.desktop.in`, `data/meson.build` | `patches/data/bazaar-deb-mimeapps.list` |
+| H16 | `src/bz-window.c` | `bz-gnome-extensions-page.h` → `BZ_TYPE_GNOME_EXTENSIONS_PAGE` |
+| H17 | `src/bz-window.blp` | `BzGnomeExtensionsPage` widget type and its `available` property |
 
-Apply order: H1 → H15, then R. H1–H4 are required for the card; H7–H11 for the
+Apply order: H1 → H17, then R. H1–H4 are required for the card; H7–H11 for the
 notifications (H7, H9, H10 together; H8 and H11 make them arrive without
 upstream's auto-update); H5 and H12 for translations; H6 only matters for
 Flatpak builds; H1, H2 and H14 for the .deb installer, H15 to make it what
-double-clicking a .deb opens.
+double-clicking a .deb opens; H1, H2, H5, H6, H16 and H17 for the GNOME
+Extensions tab.
 
 ---
 
@@ -123,6 +135,28 @@ input list, line `'bz-apps-page.blp',`. Insert after it:
     'bz-deb-install-dialog.blp',
 ```
 
+**Change 5, GNOME Extensions sources.** Anchor: the line
+`'bz-deb-install-dialog.c',` added by change 3. Insert after it:
+
+```meson
+  # DOWNSTREAM PATCH (GNOME Extensions)
+  'bz-gnome-extensions.c',
+  'bz-gnome-extensions-page.c',
+  'bz-gnome-extension-dialog.c',
+```
+
+**Change 6, GNOME Extensions Blueprints.** Anchor: the line
+`'bz-deb-install-dialog.blp',` added by change 4. Insert after it:
+
+```meson
+    # DOWNSTREAM PATCH (GNOME Extensions)
+    'bz-gnome-extensions-page.blp',
+    'bz-gnome-extension-dialog.blp',
+```
+
+`bz-gnome-extensions.c` uses libsoup 3 and json-glib, which `bz_deps`
+already has (`libsoup_dep`, `json_glib_dep`).
+
 **Connection:** produces `bz-apt-updates.o`, `bz-apt-updates-card.o`,
 `bz-deb-installer.o`, `bz-deb-install-dialog.o` and the two `.ui` files
 from `patches/src/`. No new `dependency()` is
@@ -154,6 +188,14 @@ Then, for the .deb installer, after that line:
 
 ```xml
     <file preprocess="xml-stripblanks">bz-deb-install-dialog.ui</file>
+```
+
+Then, for the GNOME Extensions tab, after that line:
+
+```xml
+    <!-- DOWNSTREAM PATCH (GNOME Extensions) -->
+    <file preprocess="xml-stripblanks">bz-gnome-extensions-page.ui</file>
+    <file preprocess="xml-stripblanks">bz-gnome-extension-dialog.ui</file>
 ```
 
 **Connection:** the `.ui` files produced by H1 → resource paths used in
@@ -264,10 +306,16 @@ src/bz-update-notifier.c
 src/bz-deb-installer.c
 src/bz-deb-install-dialog.blp
 src/bz-deb-install-dialog.c
+# DOWNSTREAM PATCH (GNOME Extensions)
+src/bz-gnome-extensions.c
+src/bz-gnome-extensions-page.blp
+src/bz-gnome-extensions-page.c
+src/bz-gnome-extension-dialog.blp
+src/bz-gnome-extension-dialog.c
 ```
 
 **Connection:** the `_()` / `ngettext ()` / Blueprint `_("…")` strings in
-the seven new files. The `.h` files hold no strings.
+the twelve new files. The `.h` files hold no strings.
 
 **If the anchor is gone:** insert the three lines in alphabetical position.
 
@@ -287,8 +335,12 @@ base commit is `"--system-talk-name=org.freedesktop.Accounts"`. Append
 ```json
     "--system-talk-name=org.freedesktop.PackageKit",
     "--system-talk-name=org.freedesktop.login1",
-    "--talk-name=org.gnome.SessionManager"
+    "--talk-name=org.gnome.SessionManager",
+    "--talk-name=org.gnome.Shell.Extensions"
 ```
+
+(The last line is for the GNOME Extensions tab, `bz-gnome-extensions.c`.
+Without it, in a sandbox, the tab stays hidden.)
 
 Validate:
 
@@ -486,8 +538,9 @@ the same msgid (gettext rejects the duplicate), and checks the result with
 `msgfmt -c`. Existing translations are never changed, so upstream's win,
 and running it again adds nothing. TEST.md T1 checks it was run.
 
-**Connection:** the `_()`/`ngettext ()` strings of the four files listed in
-H5. Adding a translatable string to the patch means adding its translation
+**Connection:** the `_()`/`ngettext ()` strings of the files listed in
+H5 (the GNOME Extensions tab's strings are in the same fragment, after a
+comment line naming them). Adding a translatable string to the patch means adding its translation
 to `patches/po/id-apt-updates.po`. A fragment for another language is a
 file `patches/po/<lang>-apt-updates.po`; the script picks it up.
 
@@ -642,6 +695,76 @@ lines into that file instead and drop change 2.
 
 ---
 
+## H16: `src/bz-window.c`: register the Extensions page type
+
+**Why:** `bz-window.blp` (H17) instantiates `$BzGnomeExtensionsPage`;
+GtkBuilder can only create a type that is registered before the window
+template is parsed.
+
+**Change.** Anchor 1: `#include "bz-search-page.h"`. Insert after it:
+
+```c
+/* DOWNSTREAM PATCH (GNOME Extensions): see ai-patches/DIFF.md H16 */
+#include "bz-gnome-extensions-page.h"
+```
+
+Anchor 2: in `bz_window_class_init ()`, the line
+`g_type_ensure (BZ_TYPE_FLATHUB_PAGE);`. Insert after it:
+
+```c
+  /* DOWNSTREAM PATCH (GNOME Extensions) */
+  g_type_ensure (BZ_TYPE_GNOME_EXTENSIONS_PAGE);
+```
+
+**Connection:** `patches/src/bz-gnome-extensions-page.h`.
+
+**If the anchor is gone:** put the `g_type_ensure` with the other ones
+before `gtk_widget_class_set_template_from_resource (…"bz-window.ui")`.
+
+---
+
+## H17: `src/bz-window.blp`: the Extensions tab
+
+**Why:** the window's tabs are the pages of `main_view_stack`; the header
+bar's `AdwViewSwitcher` and the narrow layout's `AdwViewSwitcherBar` show
+every visible page.
+
+**Change.** Anchor: the `Adw.ViewStackPage` named `search`, ending with
+
+```text
+                        child: $BzSearchPage search_page {
+                          state: bind template.state;
+                        };
+                      }
+```
+
+Insert after it:
+
+```blueprint
+
+                      // DOWNSTREAM PATCH (GNOME Extensions): see ai-patches/DIFF.md H17.
+                      // Shown only when GNOME Shell's extension service runs.
+                      Adw.ViewStackPage {
+                        name: "gnome-extensions";
+                        // Translators: the tab listing GNOME Shell extensions
+                        title: _("Extensions");
+                        icon-name: "application-x-addon-symbolic";
+                        visible: bind gnome_extensions_page.available;
+
+                        child: $BzGnomeExtensionsPage gnome_extensions_page {};
+                      }
+```
+
+**Connection:** `BzGnomeExtensionsPage` (`patches/src/bz-gnome-extensions-page.c`)
+creates its own `BzGnomeExtensions` model; `available` follows GNOME
+Shell's `org.gnome.Shell.Extensions` on the session bus, so the tab hides
+itself outside GNOME Shell. It needs nothing from `BzStateInfo`.
+
+**If the anchor is gone:** add the page as the last child of whatever
+`AdwViewStack` holds the Explore/Library/Search pages.
+
+---
+
 ## R: rebrand to Warsi (script, no diff)
 
 **Why:** the user decided on 2026-11-15 to ship the patched Bazaar as Warsi
@@ -670,7 +793,8 @@ changes only `meson.build`, `src/`, `data/` and `po/`:
 | `data/id.blankonlinux.warsi.desktop.in` | desktop file | `Name=Warsi`; `Keywords` gains `Warung Aplikasi;Bazaar;GNOME Software;` (search words for Praya and GNOME Shell) |
 | `data/id.blankonlinux.warsi.metainfo.xml.in` | AppStream | `<name>Warsi</name>`, gettext domain `warsi`, one more description paragraph |
 | `po/*.po` | translations | the renamed msgids and their translations (PLAN.md §10.3 step 4); every translation of the desktop `Keywords` gets `Software;Store;Warung Aplikasi;Bazaar;GNOME Software;` appended; `po/id.po` also gets `patches/rebrand/po/id-rebrand.po` |
-| new | `src/bz-rebrand.c`, `src/bz-rebrand.h`, the three app icons | from `patches/rebrand/src/` and `patches/rebrand/icons/` |
+| new | `src/bz-rebrand.c` (About note and the "Warsi Logo" legal section), `src/bz-rebrand.h`, `src/warsi-wordmark-symbolic.svg`, the three app icons | from `patches/rebrand/src/` and `patches/rebrand/icons/` |
+| `src/bz-window.blp`, `src/style.css`, `src/bazaar.gresource.xml` | the Warsi wordmark | a `.warsi-wordmark` box first in the main header bar (hidden while loading), the window title hidden below 700 px, its CSS (`-gtk-recolor()` in `--accent-color`) and `warsi-wordmark-symbolic.svg` in the resources |
 | removed | `data/icons/id.blankonlinux.warsi.Source.svg` | Bazaar's logo source; not installed |
 
 Each edit names the exact upstream text it replaces (`EDITS` in the
@@ -686,7 +810,7 @@ APT hooks use (H8's `gsettings get`, H10's schema, H11's autostart file).
 
 ## Full unified diff (for `git apply`)
 
-This is the exact `git diff` of the thirteen files of hooks H1–H11 and H13–H15 against
+This is the exact `git diff` of the fifteen files of hooks H1–H11 and H13–H17 against
 the base commit (H12 is the script above). It is
 the only `diff`-fenced block in this file, so it can be extracted and applied
 mechanically:
@@ -701,10 +825,10 @@ diff does **not** include the new files; copy those from `patches/src/`
 
 ```diff
 diff --git a/build-aux/flatpak/io.github.kolunmi.Bazaar.json b/build-aux/flatpak/io.github.kolunmi.Bazaar.json
-index c7ee7da1..1c005d1f 100644
+index c7ee7da1..df9d4b85 100644
 --- a/build-aux/flatpak/io.github.kolunmi.Bazaar.json
 +++ b/build-aux/flatpak/io.github.kolunmi.Bazaar.json
-@@ -23,7 +23,10 @@
+@@ -23,7 +23,11 @@
      "--system-talk-name=org.freedesktop.Flatpak.SystemHelper",
      "--filesystem=/var/tmp",
      "--filesystem=~/.var/app",
@@ -712,7 +836,8 @@ index c7ee7da1..1c005d1f 100644
 +    "--system-talk-name=org.freedesktop.Accounts",
 +    "--system-talk-name=org.freedesktop.PackageKit",
 +    "--system-talk-name=org.freedesktop.login1",
-+    "--talk-name=org.gnome.SessionManager"
++    "--talk-name=org.gnome.SessionManager",
++    "--talk-name=org.gnome.Shell.Extensions"
    ],
    "cleanup": [
      "/share/zsh",
@@ -775,10 +900,10 @@ index 315bef7f..aa6615dc 100644
  subdir('icons')
  subdir('dbus')
 diff --git a/po/POTFILES.in b/po/POTFILES.in
-index 85f4751c..a700b854 100644
+index 85f4751c..2ecfb4e8 100644
 --- a/po/POTFILES.in
 +++ b/po/POTFILES.in
-@@ -19,6 +19,14 @@ src/bz-application-map-factory.c
+@@ -19,6 +19,20 @@ src/bz-application-map-factory.c
  src/bz-application.c
  src/bz-apps-page.blp
  src/bz-apps-page.c
@@ -790,6 +915,12 @@ index 85f4751c..a700b854 100644
 +src/bz-deb-installer.c
 +src/bz-deb-install-dialog.blp
 +src/bz-deb-install-dialog.c
++# DOWNSTREAM PATCH (GNOME Extensions)
++src/bz-gnome-extensions.c
++src/bz-gnome-extensions-page.blp
++src/bz-gnome-extensions-page.c
++src/bz-gnome-extension-dialog.blp
++src/bz-gnome-extension-dialog.c
  src/bz-appstream-parser.c
  src/bz-article-list-view.c
  src/bz-article-tile.blp
@@ -841,16 +972,19 @@ index 7c860b80..da2c2ae5 100644
    sd_event_exit (event, 0);
    return 0;
 diff --git a/src/bazaar.gresource.xml b/src/bazaar.gresource.xml
-index 69589645..15689cb0 100644
+index 69589645..48b8dc10 100644
 --- a/src/bazaar.gresource.xml
 +++ b/src/bazaar.gresource.xml
-@@ -26,6 +26,9 @@
+@@ -26,6 +26,12 @@
      <file preprocess="xml-stripblanks">bz-app-size-dialog.ui</file>
      <file preprocess="xml-stripblanks">bz-app-tile.ui</file>
      <file preprocess="xml-stripblanks">bz-apps-page.ui</file>
 +    <!-- DOWNSTREAM PATCH (APT system updates) -->
 +    <file preprocess="xml-stripblanks">bz-apt-updates-card.ui</file>
 +    <file preprocess="xml-stripblanks">bz-deb-install-dialog.ui</file>
++    <!-- DOWNSTREAM PATCH (GNOME Extensions) -->
++    <file preprocess="xml-stripblanks">bz-gnome-extensions-page.ui</file>
++    <file preprocess="xml-stripblanks">bz-gnome-extension-dialog.ui</file>
      <file preprocess="xml-stripblanks">bz-appstream-description-render.ui</file>
      <file preprocess="xml-stripblanks">bz-article.ui</file>
      <file preprocess="xml-stripblanks">bz-article-tile.ui</file>
@@ -943,6 +1077,51 @@ index 904e6e49..01ace80d 100644
 +  g_type_ensure (BZ_TYPE_APT_UPDATES_CARD);
  
    gtk_widget_class_set_template_from_resource (widget_class, "/io/github/kolunmi/Bazaar/bz-library-page.ui");
+   bz_widget_class_bind_all_util_callbacks (widget_class);
+diff --git a/src/bz-window.blp b/src/bz-window.blp
+index e780822f..eb3533de 100644
+--- a/src/bz-window.blp
++++ b/src/bz-window.blp
+@@ -140,6 +140,18 @@ template $BzWindow: Adw.ApplicationWindow {
+                           state: bind template.state;
+                         };
+                       }
++
++                      // DOWNSTREAM PATCH (GNOME Extensions): see ai-patches/DIFF.md H17.
++                      // Shown only when GNOME Shell's extension service runs.
++                      Adw.ViewStackPage {
++                        name: "gnome-extensions";
++                        // Translators: the tab listing GNOME Shell extensions
++                        title: _("Extensions");
++                        icon-name: "application-x-addon-symbolic";
++                        visible: bind gnome_extensions_page.available;
++
++                        child: $BzGnomeExtensionsPage gnome_extensions_page {};
++                      }
+                     };
+                   }
+                 };
+diff --git a/src/bz-window.c b/src/bz-window.c
+index fc130470..b31bb99d 100644
+--- a/src/bz-window.c
++++ b/src/bz-window.c
+@@ -37,6 +37,8 @@
+ #include "bz-progress-bar.h"
+ #include "bz-search-bar.h"
+ #include "bz-search-page.h"
++/* DOWNSTREAM PATCH (GNOME Extensions): see ai-patches/DIFF.md H16 */
++#include "bz-gnome-extensions-page.h"
+ #include "bz-transaction-dialog.h"
+ #include "bz-transaction-manager.h"
+ #include "bz-update-history-dialog.h"
+@@ -903,6 +905,8 @@ bz_window_class_init (BzWindowClass *klass)
+   g_type_ensure (BZ_TYPE_ENTRY);
+   g_type_ensure (BZ_TYPE_LIBRARY_PAGE);
+   g_type_ensure (BZ_TYPE_FLATHUB_PAGE);
++  /* DOWNSTREAM PATCH (GNOME Extensions) */
++  g_type_ensure (BZ_TYPE_GNOME_EXTENSIONS_PAGE);
+ 
+   gtk_widget_class_set_template_from_resource (widget_class, "/io/github/kolunmi/Bazaar/bz-window.ui");
    bz_widget_class_bind_all_util_callbacks (widget_class);
 diff --git a/src/main.c b/src/main.c
 index 34ec8372..3cfaafef 100644
@@ -1043,10 +1222,10 @@ index 34ec8372..3cfaafef 100644
        bge_init ();
  
 diff --git a/src/meson.build b/src/meson.build
-index 7cbd7f24..87a17bd9 100644
+index 7cbd7f24..e9e25424 100644
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -67,6 +67,14 @@ bz_sources = files(
+@@ -67,6 +67,18 @@ bz_sources = files(
    'bz-application-map-factory.c',
    'bz-application.c',
    'bz-apps-page.c',
@@ -1058,16 +1237,23 @@ index 7cbd7f24..87a17bd9 100644
 +  # DOWNSTREAM PATCH (APT system updates): .deb file installer
 +  'bz-deb-installer.c',
 +  'bz-deb-install-dialog.c',
++  # DOWNSTREAM PATCH (GNOME Extensions)
++  'bz-gnome-extensions.c',
++  'bz-gnome-extensions-page.c',
++  'bz-gnome-extension-dialog.c',
    'bz-appstream-description-render.c',
    'bz-appstream-parser.c',
    'bz-article-list-view.c',
-@@ -201,6 +209,9 @@ blueprints = custom_target('blueprints',
+@@ -201,6 +213,12 @@ blueprints = custom_target('blueprints',
      'bz-app-size-dialog.blp',
      'bz-app-tile.blp',
      'bz-apps-page.blp',
 +    # DOWNSTREAM PATCH (APT system updates)
 +    'bz-apt-updates-card.blp',
 +    'bz-deb-install-dialog.blp',
++    # DOWNSTREAM PATCH (GNOME Extensions)
++    'bz-gnome-extensions-page.blp',
++    'bz-gnome-extension-dialog.blp',
      'bz-appstream-description-render.blp',
      'bz-article.blp',
      'bz-article-tile.blp',

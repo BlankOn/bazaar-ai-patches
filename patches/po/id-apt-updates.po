@@ -301,3 +301,150 @@ msgstr[0] "Juga memasang atau memperbarui %u paket lain"
 msgid "Removes %u package"
 msgid_plural "Removes %u packages"
 msgstr[0] "Menghapus %u paket"
+
+# GNOME Extensions tab (bz-gnome-extensions*.c/.blp, bz-gnome-extension-dialog.*,
+# bz-window.blp H17); see ai-patches/PLAN.md §13.
+
+#. Translators: the tab listing GNOME Shell extensions
+msgid "Extensions"
+msgstr "Ekstensi"
+
+msgid "Enabled"
+msgstr "Aktif"
+
+msgid "Disabled"
+msgstr "Nonaktif"
+
+#. Translators: a GNOME Shell extension that does not support this GNOME version
+msgid "Incompatible"
+msgstr "Tidak Kompatibel"
+
+msgid "Installing…"
+msgstr "Memasang…"
+
+msgid "Enabling…"
+msgstr "Mengaktifkan…"
+
+msgid "Disabling…"
+msgstr "Menonaktifkan…"
+
+msgid "This extension failed to start."
+msgstr "Ekstensi ini gagal dijalankan."
+
+msgid "This extension does not support this version of GNOME."
+msgstr "Ekstensi ini tidak mendukung versi GNOME ini."
+
+#, c-format
+msgid "GNOME Shell could not do this: %s"
+msgstr "GNOME Shell tidak dapat melakukannya: %s"
+
+msgid "GNOME Shell could not do this."
+msgstr "GNOME Shell tidak dapat melakukannya."
+
+msgid "GNOME Shell is not running."
+msgstr "GNOME Shell tidak berjalan."
+
+msgid "No Extensions Installed"
+msgstr "Belum Ada Ekstensi Terpasang"
+
+msgid "No Extensions Found"
+msgstr "Ekstensi Tidak Ditemukan"
+
+msgid "Extensions you install appear here."
+msgstr "Ekstensi yang Anda pasang akan muncul di sini."
+
+msgid "Try a different search."
+msgstr "Coba kata pencarian lain."
+
+msgid "GNOME Shell extensions are turned off"
+msgstr "Ekstensi GNOME Shell dimatikan"
+
+msgid "_Turn On"
+msgstr "_Nyalakan"
+
+msgid "Search Extensions"
+msgstr "Cari Ekstensi"
+
+msgid "Sort"
+msgstr "Urutkan"
+
+#. Translators: sort GNOME Shell extensions by last update
+msgid "Recent"
+msgstr "Terbaru"
+
+msgid "Could Not Reach extensions.gnome.org"
+msgstr "Tidak Dapat Menghubungi extensions.gnome.org"
+
+msgid "Check your internet connection and try again."
+msgstr "Periksa koneksi internet Anda, lalu coba lagi."
+
+msgid "_Try Again"
+msgstr "_Coba Lagi"
+
+#. Translators: %s is the name of the person who made a GNOME Shell extension
+#, c-format
+msgid "by %s"
+msgstr "oleh %s"
+
+msgid "The extension is deleted from this computer."
+msgstr "Ekstensi ini akan dihapus dari komputer ini."
+
+msgid "_Install"
+msgstr "_Pasang"
+
+msgid "Settings"
+msgstr "Pengaturan"
+
+msgid ""
+"Extensions run inside GNOME Shell with full access to your session. Only "
+"install extensions you trust."
+msgstr ""
+"Ekstensi berjalan di dalam GNOME Shell dengan akses penuh ke sesi Anda. "
+"Pasang hanya ekstensi yang Anda percayai."
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Top Bar"
+msgstr "Bilah Atas"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Workspaces"
+msgstr "Ruang Kerja"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Windows"
+msgstr "Jendela"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "App Menu"
+msgstr "Menu Aplikasi"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Clipboard"
+msgstr "Papan Klip"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "System Monitor"
+msgstr "Pemantau Sistem"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Battery"
+msgstr "Baterai"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Weather"
+msgstr "Cuaca"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Appearance"
+msgstr "Tampilan"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Wallpaper"
+msgstr "Latar Belakang"
+
+#. Translators: a topic of GNOME Shell extensions, shown as a search suggestion
+msgid "Screenshot"
+msgstr "Tangkapan Layar"
+
+msgid "Loading more extensions"
+msgstr "Memuat ekstensi lainnya"

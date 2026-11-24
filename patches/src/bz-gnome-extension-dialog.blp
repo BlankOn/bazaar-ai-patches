@@ -1,0 +1,239 @@
+// DOWNSTREAM PATCH (GNOME Extensions): see ai-patches/PLAN.md §13.
+using Gtk 4.0;
+using Adw 1;
+
+template $BzGnomeExtensionDialog: Adw.Dialog {
+  content-width: 600;
+  content-height: 720;
+  title: bind template.extension as <$BzGnomeExtension>.name;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: ScrolledWindow {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+
+      child: Adw.Clamp {
+        maximum-size: 560;
+        margin-start: 18;
+        margin-end: 18;
+        margin-bottom: 24;
+
+        child: Box {
+          orientation: vertical;
+          spacing: 18;
+
+          Box {
+            orientation: vertical;
+            spacing: 6;
+            halign: center;
+
+            Image {
+              pixel-size: 96;
+              paintable: bind template.extension as <$BzGnomeExtension>.icon;
+              visible: bind template.extension as <$BzGnomeExtension>.has-icon;
+            }
+
+            Image {
+              pixel-size: 72;
+              width-request: 96;
+              height-request: 96;
+              icon-name: "application-x-addon-symbolic";
+              visible: bind $invert_boolean(template.extension as <$BzGnomeExtension>.has-icon) as <bool>;
+
+              styles [
+                "dimmed",
+              ]
+            }
+
+            Label {
+              wrap: true;
+              justify: center;
+              label: bind template.extension as <$BzGnomeExtension>.name;
+
+              styles [
+                "title-1",
+              ]
+            }
+
+            Label {
+              wrap: true;
+              justify: center;
+              label: bind $format_creator(template.extension as <$BzGnomeExtension>.creator) as <string>;
+              visible: bind $is_set(template.extension as <$BzGnomeExtension>.creator) as <bool>;
+
+              styles [
+                "dimmed",
+              ]
+            }
+          }
+
+          Box {
+            halign: center;
+            spacing: 12;
+            visible: bind $invert_boolean(template.extension as <$BzGnomeExtension>.installed) as <bool>;
+
+            Button {
+              label: _("_Install");
+              use-underline: true;
+              sensitive: bind $invert_boolean(template.extension as <$BzGnomeExtension>.busy) as <bool>;
+              clicked => $install_cb(template);
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            }
+
+            Adw.Spinner {
+              visible: bind template.extension as <$BzGnomeExtension>.busy;
+            }
+          }
+
+          Label {
+            wrap: true;
+            justify: center;
+            label: bind template.extension as <$BzGnomeExtension>.error;
+            visible: bind template.extension as <$BzGnomeExtension>.has-error;
+
+            styles [
+              "error",
+            ]
+          }
+
+          ListBox {
+            selection-mode: none;
+            visible: bind template.extension as <$BzGnomeExtension>.installed;
+
+            styles [
+              "boxed-list",
+            ]
+
+            Adw.SwitchRow enabled_row {
+              title: _("Enabled");
+              active: bind template.extension as <$BzGnomeExtension>.enabled;
+              sensitive: bind $can_toggle(template.extension as <$BzGnomeExtension>.can-change, template.extension as <$BzGnomeExtension>.busy) as <bool>;
+              notify::active => $enabled_changed_cb(template);
+            }
+
+            Adw.ActionRow {
+              title: _("Settings");
+              activatable: true;
+              visible: bind template.extension as <$BzGnomeExtension>.has-prefs;
+              activated => $prefs_cb(template);
+
+              [suffix]
+              Image {
+                icon-name: "go-next-symbolic";
+              }
+            }
+
+            Adw.ButtonRow {
+              title: _("_Remove");
+              use-underline: true;
+              visible: bind template.extension as <$BzGnomeExtension>.can-uninstall;
+              activated => $remove_cb(template);
+
+              styles [
+                "destructive-action",
+              ]
+            }
+          }
+
+          Picture {
+            paintable: bind template.extension as <$BzGnomeExtension>.screenshot;
+            visible: bind template.extension as <$BzGnomeExtension>.has-screenshot;
+            content-fit: contain;
+            can-shrink: true;
+            height-request: 280;
+            overflow: hidden;
+
+            styles [
+              "card",
+            ]
+          }
+
+          Label {
+            wrap: true;
+            wrap-mode: word_char;
+            xalign: 0.0;
+            label: bind template.extension as <$BzGnomeExtension>.description;
+          }
+
+          ListBox {
+            selection-mode: none;
+
+            styles [
+              "boxed-list",
+            ]
+
+            Adw.ActionRow {
+              // Translators: the number of times a GNOME Shell extension was downloaded
+              title: _("Downloads");
+              subtitle: bind $format_downloads(template.extension as <$BzGnomeExtension>.downloads) as <string>;
+              visible: bind $is_nonzero(template.extension as <$BzGnomeExtension>.downloads) as <bool>;
+
+              styles [
+                "property",
+              ]
+            }
+
+            Adw.ActionRow {
+              title: "extensions.gnome.org";
+              activatable: true;
+              visible: bind $is_set(template.extension as <$BzGnomeExtension>.link) as <bool>;
+              activated => $open_link_cb(template);
+
+              [suffix]
+              Image {
+                icon-name: "external-link-symbolic";
+              }
+            }
+
+            Adw.ActionRow {
+              title: _("Website");
+              subtitle: bind template.extension as <$BzGnomeExtension>.homepage;
+              activatable: true;
+              visible: bind $is_set(template.extension as <$BzGnomeExtension>.homepage) as <bool>;
+              activated => $open_homepage_cb(template);
+
+              [suffix]
+              Image {
+                icon-name: "external-link-symbolic";
+              }
+            }
+          }
+
+          Box {
+            spacing: 6;
+
+            Image {
+              valign: start;
+              icon-name: "dialog-warning-symbolic";
+
+              styles [
+                "dimmed",
+              ]
+            }
+
+            Label {
+              hexpand: true;
+              wrap: true;
+              xalign: 0.0;
+              label: _("Extensions run inside GNOME Shell with full access to your session. Only install extensions you trust.");
+
+              styles [
+                "caption",
+                "dimmed",
+              ]
+            }
+          }
+        };
+      };
+    };
+  };
+}

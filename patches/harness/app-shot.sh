@@ -9,6 +9,9 @@
 #   APP_SHOT_EXPAND=1 also expands the APT package list.
 #   APP_SHOT_ABOUT=1 opens the About dialog before the screenshot.
 #   APP_SHOT_WIDTH=N resizes the window to N pixels wide (narrow layout below 700).
+#   APP_SHOT_PAGE=NAME shows another page instead of the Library (e.g.
+#   gnome-extensions); APP_SHOT_EXT_SEARCH, APP_SHOT_EXT_SORT and
+#   APP_SHOT_EXT_OPEN drive the Extensions page (see app-shot.c).
 #   APP_SHOT_OPEN=FILE opens FILE like a double click would (e.g. a .deb,
 #   for the package installer dialog).
 set -e
@@ -58,7 +61,7 @@ fi
 
 PATH="$BUILD/src:$PATH" GSETTINGS_SCHEMA_DIR="$BUILD/schemas" \
   XDG_DATA_DIRS="$ICONS:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" \
-  G_MESSAGES_DEBUG=BAZAAR::APT,BAZAAR::DEB APP_SHOT="$OUT" APP_SHOT_DELAY="$DELAY" \
+  G_MESSAGES_DEBUG="BAZAAR::APT BAZAAR::DEB BAZAAR::GNOME-EXTENSIONS" APP_SHOT="$OUT" APP_SHOT_DELAY="$DELAY" \
   LD_PRELOAD="$BUILD/apt-harness/app-shot.so" \
   timeout $((DELAY + 60)) "$BUILD/src/$APP_BIN" ${APP_SHOT_OPEN:+"$APP_SHOT_OPEN"}
 
