@@ -61,6 +61,18 @@ bz_rebrand_about_dialog (AdwAboutDialog *dialog)
 
   g_return_if_fail (ADW_IS_ABOUT_DIALOG (dialog));
 
+  /* Legal: the logo's typeface (SIL Open Font License 1.1). */
+  adw_about_dialog_add_legal_section (
+      dialog,
+      // Translators: Please treat "Warsi" as a brand name and avoid translating.
+      _ ("Warsi Logo"),
+      "Copyright 2014 The Praise Project Authors (https://github.com/googlefonts/praise-script)",
+      GTK_LICENSE_CUSTOM,
+      // Translators: Please treat "Warsi" and "Praise" as names and avoid translating.
+      _ ("The Warsi logo is set in the Praise typeface by Robert Leuschke, licensed "
+         "under the <a href=\"https://openfontlicense.org\">SIL Open Font License, "
+         "Version 1.1</a>."));
+
   // Translators: Please treat "Bazaar" and "BlankOn" as brand names and avoid translating.
   note = _ ("Originally Bazaar, patched by BlankOn Linux");
 

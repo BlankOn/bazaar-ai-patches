@@ -8,6 +8,7 @@
 # Usage:  ai-patches/patches/harness/app-shot.sh OUT.png [delay-seconds]
 #   APP_SHOT_EXPAND=1 also expands the APT package list.
 #   APP_SHOT_ABOUT=1 opens the About dialog before the screenshot.
+#   APP_SHOT_WIDTH=N resizes the window to N pixels wide (narrow layout below 700).
 #   APP_SHOT_OPEN=FILE opens FILE like a double click would (e.g. a .deb,
 #   for the package installer dialog).
 set -e

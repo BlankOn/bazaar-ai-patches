@@ -78,6 +78,45 @@ ABOUT_NOTE_HOOK = (
     "   * Linux\" under the name; see ai-patches/PLAN.md, \"Rebrand\". */\n"
     "  bz_rebrand_about_dialog (ADW_ABOUT_DIALOG (dialog));\n\n")
 
+# The Warsi wordmark at the start of the main header bar, before the account
+# avatar and the background-task spinner. Drawn in the accent colour so it follows the
+# user's accent and dark mode; hidden while loading, when the title already
+# says "Warsi". See ai-patches/PLAN.md, "Rebrand".
+WORDMARK_ANCHOR = "                  Adw.HeaderBar top_header_bar {\n"
+WORDMARK_WIDGET = (
+    "                    // DOWNSTREAM PATCH (Warsi rebrand): the Warsi wordmark,\n"
+    "                    // style.css .warsi-wordmark.\n"
+    "                    [start]\n"
+    "                    Box {\n"
+    "                      visible: bind $invert_boolean(template.state as <$BzStateInfo>.busy) as <bool>;\n"
+    "                      width-request: 80;\n"
+    "                      height-request: 24;\n"
+    "                      valign: center;\n"
+    "                      margin-start: 6;\n"
+    "                      can-target: false;\n"
+    "\n"
+    "                      styles [\n"
+    '                        "warsi-wordmark",\n'
+    "                      ]\n"
+    "                    }\n"
+    "\n")
+CSS_ANCHOR = (
+    "distro-chart-row:focus-visible {\n"
+    "\toutline: 2px solid alpha(var(--accent-color), 0.5);\n"
+    "\toutline-offset: -2px;\n"
+    "}\n")
+WORDMARK_CSS = (
+    "\n"
+    "/* DOWNSTREAM PATCH (Warsi rebrand): the header bar wordmark, recoloured\n"
+    " * with the accent colour (bz-window.blp). */\n"
+    ".warsi-wordmark {\n"
+    "\tcolor: var(--accent-color);\n"
+    '\tbackground-image: -gtk-recolor(url("resource://' + NEW_PATH + '/warsi-wordmark-symbolic.svg"));\n'
+    "\tbackground-size: contain;\n"
+    "\tbackground-repeat: no-repeat;\n"
+    "\tbackground-position: left center;\n"
+    "}\n")
+
 # (relative path after step 1, upstream text, rebranded text). Every
 # occurrence is replaced. An edit whose rebranded text contains the upstream
 # text (an insertion) is skipped once the rebranded text is present.
@@ -142,6 +181,17 @@ EDITS = [
     ("src/shortcuts-dialog.blp", '"Quit Bazaar"', '"Quit Warsi"'),
     ("src/bz-inspector.c", 'g_value_set_string (value, "Bazaar");',
      'g_value_set_string (value, "Warsi");'),
+    # the wordmark at the start of the main header bar (src/warsi-wordmark-symbolic.svg)
+    ("src/bz-window.blp", WORDMARK_ANCHOR, WORDMARK_ANCHOR + WORDMARK_WIDGET),
+    ("src/bz-window.blp", "            top_header_bar.title-widget: null;\n",
+     "            top_header_bar.title-widget: null;\n"
+     "            // DOWNSTREAM PATCH (Warsi rebrand): the wordmark names the app\n"
+     "            top_header_bar.show-title: false;\n"),
+    ("src/style.css", CSS_ANCHOR, CSS_ANCHOR + WORDMARK_CSS),
+    ("src/bazaar.gresource.xml", "    <file>inspector.css</file>\n",
+     "    <file>inspector.css</file>\n"
+     "    <!-- DOWNSTREAM PATCH (Warsi rebrand) -->\n"
+     '    <file preprocess="xml-stripblanks">warsi-wordmark-symbolic.svg</file>\n'),
 ]
 
 # msgids (as written in .po files, unwrapped) renamed Bazaar -> Warsi in

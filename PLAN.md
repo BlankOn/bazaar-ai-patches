@@ -616,6 +616,20 @@ packages, which are unchanged. So the two can be installed together without
   data; `app-devel.svg` is the same stall in grey; `app-symbolic.svg` is the
   awning over the "W" in one colour. Edit the source, then regenerate the
   other three from its paths.
+- The Warsi wordmark (owner's artwork, 2026-11-24) sits at the start of the
+  main header bar, before the account avatar and the background-task
+  spinner: `src/warsi-wordmark-symbolic.svg` (cropped from
+  `patches/rebrand/icons/wordmark-source.svg`), drawn by style.css
+  `.warsi-wordmark` with `-gtk-recolor()` in `--accent-color`, so it follows
+  the user's accent colour and dark mode. Hidden while loading (the title
+  says "Warsi" then); below 700 px the header bar's title is hidden instead,
+  as the wordmark already names the app. rebrand.py adds it (EDITS on
+  bz-window.blp, style.css, bazaar.gresource.xml). GNOME's HIG does not put
+  branding in header bars; the owner chose this, kept small and themed.
+- The logo is set in the Praise typeface by Robert Leuschke (Copyright 2014
+  The Praise Project Authors, SIL Open Font License 1.1). The font is not
+  shipped, only outlines; it is credited in the About dialog's Legal page
+  (bz-rebrand.c, "Warsi Logo") and in the package's debian/copyright.
 - The About dialog's "Report an Issue" still points at upstream's tracker,
   as the user asked. Reports about the APT card or notifications belong to
   BlankOn.

@@ -248,6 +248,17 @@ On a Warsi tree, a third screenshot shows the About dialog:
 APP_SHOT_ABOUT=1 ai-patches/patches/harness/app-shot.sh build/apt-tests/app-about.png 20
 ```
 
+The Warsi wordmark sits at the start of the header bar in the accent colour.
+Check it in dark mode and in the narrow layout (wordmark only, no title):
+
+```bash
+ADW_DEBUG_COLOR_SCHEME=prefer-dark ai-patches/patches/harness/app-shot.sh build/apt-tests/app-dark.png 10
+APP_SHOT_WIDTH=400 ai-patches/patches/harness/app-shot.sh build/apt-tests/app-narrow.png 10
+```
+
+The window manager sometimes keeps the old size; if the PNG is not 400 px
+wide, run it again.
+
 Starts `build/src/bazaar` (`build/src/warsi`) with a small `LD_PRELOAD` shim
 (`patches/harness/app-shot.c`) that opens the Library page and saves the
 window to PNG after the given number of seconds, then exits. It clicks

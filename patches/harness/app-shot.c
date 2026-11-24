@@ -102,6 +102,14 @@ tick_cb (gpointer data)
 
       gtk_widget_activate_action (window, "window.open-library", NULL);
 
+      /* APP_SHOT_WIDTH=N: resize the window, e.g. below the 700 px
+       * breakpoint for the narrow layout. */
+      if (ticks == 2 && g_getenv ("APP_SHOT_WIDTH") != NULL)
+        {
+          gtk_window_unmaximize (GTK_WINDOW (window));
+          gtk_window_set_default_size (GTK_WINDOW (window), atoi (g_getenv ("APP_SHOT_WIDTH")), 700);
+        }
+
       if (ticks == delay - 2 && g_getenv ("APP_SHOT_EXPAND") != NULL)
         expand_apt_card (window, FALSE);
 
